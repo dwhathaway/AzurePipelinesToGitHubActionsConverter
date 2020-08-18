@@ -86,6 +86,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
         public string artifact { get; set; }
         public string displayName { get; set; }
         public string name { get; set; }
+        [DefaultValue("succeeded()")]
         public string condition { get; set; }
         [DefaultValue(false)]
         public bool continueOnError { get; set; } = false;

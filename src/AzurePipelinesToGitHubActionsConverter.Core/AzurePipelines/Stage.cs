@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.ComponentModel;
 namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
 {
     public class Stage
@@ -17,6 +18,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
         public string displayName { get; set; }
         //Add dependsOn processing for stages
         public string dependsOn { get; set; }
+        [DefaultValue("succeeded()")]
         public string condition { get; set; }
         //Variables is similar to triggers, this can be a simple list, or a more complex variable object
         public List<Variable> variables { get; set; }
