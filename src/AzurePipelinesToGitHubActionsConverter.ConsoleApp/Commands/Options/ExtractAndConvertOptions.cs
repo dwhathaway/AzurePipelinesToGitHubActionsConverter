@@ -30,8 +30,8 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Commands.Options
         [Option('o', "outputFolder", Required = false, HelpText = "The folder path where the .github/workflows folder should be created")]
         public string? OutputFolder { get; set; }
 
-        [Option('x', "pipelineFolderPrefix", Required = false, HelpText = "A base folder in the repo to look for pipelines in (all others will be ignored)")]
-        public string? PipelineFolderPrefix { get; set; }
+        [Option('x', "pipelineFolderName", Required = false, HelpText = "The folder that the Azure Pipeline is stored in (all others will be ignored)")]
+        public string? PipelineFolderName { get; set; }
 
         [Option('d', "includeIdInFilename", Required = false, Default = false, HelpText = "Whether or not to include the ID of the pipeline in the output file name - useful for processing large projects where multiple repos may reuse the same file name")]
         public bool? IncludeIdInFilename { get; set; }

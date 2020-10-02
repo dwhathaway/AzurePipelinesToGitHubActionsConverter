@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,12 +11,18 @@ using AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services;
 using AzurePipelinesToGitHubActionsConverter.Core.Conversion;
 using YamlDotNet.Serialization;
 using CommandLine;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 
 namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
 {
     class Program
     {
+        static readonly IDeserializer _yamlDeserializer = new Deserializer();
+
+        static readonly ISerializer  _yamlSerializer = new Serializer();
+
         static int Main(string[] args) {
             return Parser.Default.ParseArguments<ConvertFileOptions, ExtractAndConvertOptions>(args)
                 .MapResult(
@@ -36,28 +43,17 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
             }
 
             // Read the YAML file contents
-            string pipelineYaml = File.ReadAllText(opts.FilePath);
-
-            string outputBasePath = opts.OutputPath;
+            string pipelineYaml = CleanPrNode(File.ReadAllText(opts.FilePath));
 
             FileInfo inputFileInfo = new FileInfo(opts.FilePath);
 
+            string outputBasePath = opts.OutputFolder;
+
             // Check if an output path was provided.  If not, default one and notify the user
-            if (string.IsNullOrWhiteSpace(opts.OutputPath))
+            if (string.IsNullOrWhiteSpace(outputBasePath))
             {
-                outputBasePath = Path.Combine(inputFileInfo.DirectoryName, ".github", "workflows");
-
+                outputBasePath = inputFileInfo.DirectoryName;
                 Console.WriteLine($"'outputPath' not provided, defaulting to '{outputBasePath}'");
-            }
-            else
-            {
-                outputBasePath = Path.Combine(opts.OutputPath, ".github", "workflows");
-            }
-
-            if (!Directory.Exists(outputBasePath))
-            {
-                Console.WriteLine($"Creating folder '{outputBasePath}, it did not exist");
-                Directory.CreateDirectory(outputBasePath);
             }
 
             try
@@ -67,8 +63,39 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
 
                 var result = conversion.ConvertAzurePipelineToGitHubAction(pipelineYaml);
 
+                var outputFolder = Path.Combine(outputBasePath, ".github", "workflows");
+
+                // Create the repo-specific .github/workflows folder
+                if (!Directory.Exists(outputFolder))
+                {
+                    Console.WriteLine($"Creating folder '{outputFolder}, it did not exist");
+                    Directory.CreateDirectory(outputFolder);
+                }
+
+                if (result.comments != null && result.comments.Count > 0)
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+
+                    Console.WriteLine($"Pipeline {inputFileInfo.Name} partially converted");
+
+                    result.comments.ForEach((comment) =>
+                    {
+                        Console.WriteLine(comment);
+                    });
+
+                    Console.ResetColor();
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+
+                    Console.WriteLine($"Successfully converted {inputFileInfo.Name}");
+
+                    Console.ResetColor();
+                }
+
                 // Write the output file
-                File.WriteAllText(Path.Combine(outputBasePath, inputFileInfo.Name), result.actionsYaml);
+                File.WriteAllText(Path.Combine(outputFolder, inputFileInfo.Name), result.actionsYaml);
             }
             catch (Exception e)
             {
@@ -100,23 +127,11 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
             string outputBasePath = opts.OutputFolder;
 
             // Check if an output path was provided.  If not, default one and notify the user
-            if (string.IsNullOrWhiteSpace(opts.OutputFolder))
+            if (string.IsNullOrWhiteSpace(outputBasePath))
             {
-                outputBasePath = Path.Combine(Directory.GetCurrentDirectory(), ".github", "workflows");
-
+                outputBasePath = Directory.GetCurrentDirectory();
                 Console.WriteLine($"'outputPath' not provided, defaulting to '{outputBasePath}'");
             }
-            else
-            {
-                outputBasePath = Path.Combine(opts.OutputFolder, ".github", "workflows");
-            }
-
-            if (!Directory.Exists(outputBasePath))
-            {
-                Console.WriteLine($"Creating folder '{outputBasePath}, it did not exist");
-                Directory.CreateDirectory(outputBasePath);
-            }
-
 
             // Execute a loop
             do
@@ -137,38 +152,50 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                 {
                     // Filter the list of pipelines by the repository name
                     yamlPipelines = yamlPipelines.Where((p) =>
-                            p["repository"]["name"].Value<string>().ToLower() ==
-                            $"{opts.Project.ToLower()}/{opts.RepositoryName.ToLower()}")
+                            p["repository"]["properties"]["shortName"].Value<string>().ToLower() ==
+                            opts.RepositoryName.ToLower())
                         .ToList();
                 }
 
-                if(!string.IsNullOrEmpty(opts.PipelineFolderPrefix))
+                if(!string.IsNullOrEmpty(opts.PipelineFolderName))
                 {
                     // Filter the list of pipelines by the repository name
                     yamlPipelines = yamlPipelines.Where((p) =>
                             p["path"].Value<string>().ToLower() ==
-                            $"{opts.PipelineFolderPrefix.ToLower()}")
+                            $"{opts.PipelineFolderName.ToLower()}")
                         .ToList();
                 }
 
                 foreach (var yamlPipeline in yamlPipelines)
                 {
                     var pipelineId = yamlPipeline["id"].Value<long>();
+                    var repositoryName = yamlPipeline["repository"]["properties"]["shortName"].Value<string>();
 
                     var task1 = adoService.GetPipelineYaml(baseUrl, opts.Account, opts.Project,
                         opts.PersonalAccessToken, pipelineId, "6.1-preview.1");
 
                     Task.WaitAll(task1);
 
-                    var pipelineYaml = task1.Result;
+                    var pipelineYaml = CleanPrNode(task1.Result);
 
                     if(!string.IsNullOrWhiteSpace(pipelineYaml))
                     {
                         var yamlFullFilename = yamlPipeline["process"]["yamlFilename"].Value<string>();
                         var yamlFilename = yamlFullFilename.Split('/').Last();
 
+                        // This is completely optional, but it's possible that someone duplicated
+                        // the workflow name elsewhere in the repo
                         if (opts.IncludeIdInFilename.Value)
                             yamlFilename = $"{pipelineId.ToString()}_{yamlFilename}";
+
+                        var outputFolder = Path.Combine(outputBasePath, repositoryName, ".github", "workflows");
+
+                        // Create the repo-specific .github/workflows folder
+                        if (!Directory.Exists(outputFolder))
+                        {
+                            Console.WriteLine($"Creating folder '{outputFolder}, it did not exist");
+                            Directory.CreateDirectory(outputFolder);
+                        }
 
                         try
                         {
@@ -177,12 +204,30 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
 
                             var result = conversion.ConvertAzurePipelineToGitHubAction(pipelineYaml);
 
-                            // ToDo: output comments here
+                            if (result.comments != null && result.comments.Count > 0)
+                            {
+                                Console.ForegroundColor = ConsoleColor.Yellow;
 
-                            Console.WriteLine($"Successfully converted {yamlFullFilename}");
+                                Console.WriteLine($"Pipeline {yamlFullFilename} partially converted");
+
+                                result.comments.ForEach((comment) =>
+                                {
+                                    Console.WriteLine(comment);
+                                });
+
+                                Console.ResetColor();
+                            }
+                            else
+                            {
+                                Console.ForegroundColor = ConsoleColor.Green;
+
+                                Console.WriteLine($"Successfully converted {yamlFullFilename}");
+
+                                Console.ResetColor();
+                            }
 
                             // Write the output file
-                            File.WriteAllText(Path.Combine(outputBasePath, yamlFilename), result.actionsYaml);
+                            File.WriteAllText(Path.Combine(outputFolder, yamlFilename), result.actionsYaml);
                         }
                         catch (Exception e)
                         {
@@ -206,6 +251,47 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
             // For
 
             return retVal;
+        }
+
+        /// <summary>
+        /// Fixes a case where the call to the previewRun API returns pr: enabled: false instead of pr: none
+        /// </summary>
+        /// <param name="pipelineYaml">Pipeline YAML</param>
+        /// <returns></returns>
+        private static string CleanPrNode(string pipelineYaml)
+        {
+            string fixedPipelineYaml = string.Empty;
+
+            // Hack alert - pipelines that define the pr trigger as pr: none
+            // returns as pr: enabled: false from this call - we need to fix this for transformation purposes
+            using (StringReader s = new StringReader(pipelineYaml))
+            {
+                // Do a bunch of stuff to convert the YAML to JSON cuz json is easier to work with
+                Dictionary<object, object> yamlObject =
+                    _yamlDeserializer.Deserialize<Dictionary<object, object>>(s);
+
+                var serializer = new SerializerBuilder()
+                    .JsonCompatible()
+                    .Build();
+
+                var json = serializer.Serialize(yamlObject);
+
+                var jsonObject = JObject.Parse(json);
+
+                if (!jsonObject["pr"]["enabled"].Value<bool>())
+                    jsonObject["pr"] = "none";
+
+                json = JsonConvert.SerializeObject(jsonObject);
+
+                var expConverter = new ExpandoObjectConverter();
+                dynamic deserializedObject = JsonConvert.DeserializeObject<ExpandoObject>(json, expConverter);
+
+                // Convert it back to YAML and return
+                var yamlSerializer = new YamlDotNet.Serialization.Serializer();
+                fixedPipelineYaml = yamlSerializer.Serialize(deserializedObject);
+            }
+
+            return fixedPipelineYaml;
         }
 
         //Read in a YAML file and convert it to a T object
