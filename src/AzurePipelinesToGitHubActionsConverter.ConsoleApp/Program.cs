@@ -23,6 +23,8 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
 
         static readonly ISerializer  _yamlSerializer = new Serializer();
 
+        static List<string> _missingConverters = new List<string>();
+
         static int Main(string[] args) {
             return Parser.Default.ParseArguments<ConvertFileOptions, ExtractAndConvertOptions>(args)
                 .MapResult(
@@ -81,6 +83,10 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                     result.comments.ForEach((comment) =>
                     {
                         Console.WriteLine(comment);
+
+                        if(comment.Contains("#Note: Error! This step does not have a conversion path yet")
+                            && !_missingConverters.Contains(comment))
+                            _missingConverters.Add(comment);
                     });
 
                     Console.ResetColor();
@@ -106,6 +112,12 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                 Console.ResetColor();
 
                 retVal = -1;
+            }
+
+            if(_missingConverters.Count > 0)
+            {
+                Console.WriteLine("The following converters required by these pipelines are:");
+                _missingConverters.ForEach((missingConverter) => Console.Write(missingConverter));
             }
 
             return retVal;
@@ -213,6 +225,10 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                                 result.comments.ForEach((comment) =>
                                 {
                                     Console.WriteLine(comment);
+
+                                    if(comment.Contains("#Note: Error! This step does not have a conversion path yet")
+                                       && !_missingConverters.Contains(comment))
+                                        _missingConverters.Add(comment);
                                 });
 
                                 Console.ResetColor();
@@ -248,7 +264,11 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                 continuationToken = response.ContainsKey("continuationToken") ? response["continuationToken"].ToString() : string.Empty;
             } while (!string.IsNullOrWhiteSpace(continuationToken));
 
-            // For
+            if(_missingConverters.Count > 0)
+            {
+                Console.WriteLine("The following converters required by these pipelines are:");
+                _missingConverters.ForEach((missingConverter) => Console.Write(missingConverter));
+            }
 
             return retVal;
         }
@@ -262,33 +282,39 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
         {
             string fixedPipelineYaml = string.Empty;
 
-            // Hack alert - pipelines that define the pr trigger as pr: none
-            // returns as pr: enabled: false from this call - we need to fix this for transformation purposes
-            using (StringReader s = new StringReader(pipelineYaml))
+            if(!string.IsNullOrEmpty(pipelineYaml))
             {
-                // Do a bunch of stuff to convert the YAML to JSON cuz json is easier to work with
-                Dictionary<object, object> yamlObject =
-                    _yamlDeserializer.Deserialize<Dictionary<object, object>>(s);
+                // Hack alert - pipelines that define the pr trigger as pr: none
+                // returns as pr: enabled: false from this call - we need to fix this for transformation purposes
+                using (StringReader s = new StringReader(pipelineYaml))
+                {
+                    // Do a bunch of stuff to convert the YAML to JSON cuz json is easier to work with
+                    Dictionary<object, object> yamlObject =
+                        _yamlDeserializer.Deserialize<Dictionary<object, object>>(s);
 
-                var serializer = new SerializerBuilder()
-                    .JsonCompatible()
-                    .Build();
+                    var serializer = new SerializerBuilder()
+                        .JsonCompatible()
+                        .Build();
 
-                var json = serializer.Serialize(yamlObject);
+                    var json = serializer.Serialize(yamlObject);
 
-                var jsonObject = JObject.Parse(json);
+                    var jsonObject = JObject.Parse(json);
 
-                if (!jsonObject["pr"]["enabled"].Value<bool>())
-                    jsonObject["pr"] = "none";
+                    if(jsonObject.ContainsKey("pr"))
+                    {
+                        if (!jsonObject["pr"]["enabled"].Value<bool>())
+                            jsonObject["pr"] = "none";
+                    }
 
-                json = JsonConvert.SerializeObject(jsonObject);
+                    json = JsonConvert.SerializeObject(jsonObject);
 
-                var expConverter = new ExpandoObjectConverter();
-                dynamic deserializedObject = JsonConvert.DeserializeObject<ExpandoObject>(json, expConverter);
+                    var expConverter = new ExpandoObjectConverter();
+                    dynamic deserializedObject = JsonConvert.DeserializeObject<ExpandoObject>(json, expConverter);
 
-                // Convert it back to YAML and return
-                var yamlSerializer = new YamlDotNet.Serialization.Serializer();
-                fixedPipelineYaml = yamlSerializer.Serialize(deserializedObject);
+                    // Convert it back to YAML and return
+                    var yamlSerializer = new YamlDotNet.Serialization.Serializer();
+                    fixedPipelineYaml = yamlSerializer.Serialize(deserializedObject);
+                }
             }
 
             return fixedPipelineYaml;
