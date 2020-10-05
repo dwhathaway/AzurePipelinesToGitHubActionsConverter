@@ -267,7 +267,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
             if(_missingConverters.Count > 0)
             {
                 Console.WriteLine("The following converters required by these pipelines are:");
-                _missingConverters.ForEach((missingConverter) => Console.Write(missingConverter));
+                _missingConverters.ForEach((missingConverter) => Console.WriteLine(missingConverter));
             }
 
             return retVal;
