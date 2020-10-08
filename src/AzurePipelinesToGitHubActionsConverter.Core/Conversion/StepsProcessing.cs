@@ -38,6 +38,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     case "AZUREWEBAPP@1":
                         gitHubStep = CreateAzureWebAppDeploymentStep(step);
                         break;
+                    case "BATCHSCRIPT@1":
+                    case "CMDLINE@1":
                     case "CMDLINE@2":
                         gitHubStep = CreateScriptStep("cmd", step);
                         break;
@@ -79,6 +81,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     case "NUGETTOOLINSTALLER@1":
                         gitHubStep = CreateNuGetToolInstallerStep();
                         break;
+                    case "POWERSHELL@1":
                     case "POWERSHELL@2":
                         gitHubStep = CreateScriptStep("powershell", step);
                         break;
@@ -463,12 +466,26 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         private GitHubActions.Step CreateScriptStep(string shellType, AzurePipelines.Step step)
         {
             string targetType = GetStepInput(step, "targetType");
-            string filePath = GetStepInput(step, "filePath");
             string arguments = GetStepInput(step, "arguments");
 
-            if (targetType == "FilePath")
+            if (step.task.ToUpper() == "POWERSHELL@1" || step.task.ToUpper() == "POWERSHELL@2")
             {
+                var i = 0;
+            }
+
+            if (targetType?.ToUpper() == "FILEPATH")
+            {
+                string filePath = GetStepInput(step, "filePath");
                 step.script = filePath + " " + arguments;
+            }
+            else if (targetType == null && string.IsNullOrEmpty(step.script))
+            {
+                string fileName = GetStepInput(step, "filename");
+
+                if (fileName != null)
+                {
+                    step.script = fileName + " " + arguments;
+                }
             }
 
             GitHubActions.Step gitHubStep = new GitHubActions.Step
@@ -495,7 +512,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 {
                     if (step.inputs != null)
                     {
-                        string runValue = GetStepInput(step, "script");
+                        string runValue = GetStepInput(step, "script") ?? GetStepInput(step, "inlinescript");
                         gitHubStep.run = runValue;
                     }
                 }
