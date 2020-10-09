@@ -12,10 +12,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
     {
         private string _matrixVariableName;
         private readonly bool _verbose;
+        private readonly bool _addWorkflowTrigger;
 
-        public Conversion(bool verbose = true)
+        public Conversion(bool verbose = true, bool? addWorkflowTrigger = null)
         {
             _verbose = verbose;
+            _addWorkflowTrigger = addWorkflowTrigger ?? false;
         }
 
         /// <summary>
@@ -237,6 +239,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                 //Trigger/PR/Schedules
                 TriggerProcessing tp = new TriggerProcessing(_verbose);
+
                 if (json["trigger"] != null)
                 {
                     string triggerYaml = json["trigger"].ToString();
@@ -269,6 +272,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         gitHubActions.on.schedule = schedules.schedule;
                     }
+                }
+
+                //workflow_dispatch trigger
+                if (_addWorkflowTrigger)
+                {
+                    gitHubActions.on = new WorkflowDispatchTrigger(gitHubActions.on);
                 }
 
                 //Parameters & Variables

@@ -77,7 +77,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 push = push
             };
-
         }
 
         public GitHubActions.Trigger ProcessTriggerV2(string triggerYaml)

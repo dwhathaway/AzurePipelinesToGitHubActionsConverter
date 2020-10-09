@@ -1,6 +1,5 @@
 ﻿using AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines;
 using AzurePipelinesToGitHubActionsConverter.Core.GitHubActions;
-using System;
 using System.Collections.Generic;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
@@ -10,10 +9,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         public List<string> VariableList;
         public string MatrixVariableName;
         private readonly bool _verbose;
+        private readonly bool _addWorkflowTrigger;
 
-        public PipelineProcessing(bool verbose)
+        public PipelineProcessing(bool verbose, bool? addWorkflowTrigger = null)
         {
             _verbose = verbose;
+            _addWorkflowTrigger = addWorkflowTrigger ?? false;
         }
 
         /// <summary>
@@ -86,6 +87,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     gitHubActions.on = new GitHubActions.Trigger();
                 }
                 gitHubActions.on.schedule = schedules;
+            }
+
+            //workflow_dispatch trigger
+            if (_addWorkflowTrigger)
+            {
+                gitHubActions.on = new WorkflowDispatchTrigger(gitHubActions.on);
             }
 
             //Resources
