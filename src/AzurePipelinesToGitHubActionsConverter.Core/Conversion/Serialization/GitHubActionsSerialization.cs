@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
 {
@@ -68,8 +69,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             yaml = yaml.Replace("\r\n\r\n", "\r\n");
             yaml = yaml.Replace("\n\n", "\n");
 
-            //If we have a string with new lines and strings, it double encodes them, so we undo this
-            yaml = yaml.Replace("\\r", "\r");
+            //Goal: If we have a string with new lines and strings, it double encodes them, so we undo this by changing \\r to \r
+            // This Regex will match escaped carriage returns ONLY if they are exactly "\\r" and not \\\\r
+            var onlyCRs = @"(?<!\\)\\r";
+            yaml = Regex.Replace(yaml, onlyCRs, "\r");
+            // Now, fix ACTUAL backslash + r combos that came in via scripts... these may be paths, e.g. "${{ env.Build.SourcesDirectory }}\\tools\\\\run_windows_source_indexer.ps1" that we purposely over-encode to stop improper \r matches
+            yaml = yaml.Replace("\\\\r", "\\r");
+
             yaml = yaml.Replace("\\n", "\n");
 
             //Trim off any leading of trailing new lines 

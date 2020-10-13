@@ -522,6 +522,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 gitHubStep._if = ConditionsProcessing.TranslateConditions(step.condition);
             }
 
+            if (gitHubStep.run?.Contains("\\\\r") ?? false)
+            {
+                gitHubStep.step_message = "Note: Script step converted with detected possible carriage return (\\\\r)... Please review script for proper line breaks and correct paths";
+            }
+
             return gitHubStep;
         }
 

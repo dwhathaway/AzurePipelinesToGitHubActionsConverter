@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using YamlDotNet.Serialization;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.GitHubActions
@@ -19,11 +18,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.GitHubActions
             }
             set
             {
-                //Spaces on the beginning or end seem to be a problem for the YAML serialization
                 if (string.IsNullOrEmpty(value) == false)
                 {
-                    value = value.Trim();
+                    //Spaces on the beginning or end seem to be a problem for the YAML serialization, so we Trim() here
+                    //  Also, accidental line feeds in scripts (such as a path including a \r) need to be accounted for
+                    // If this script step includes escaped carriage returns (\\r), switch these to "\\\\r" so that we don't accidentally improperly match these as CRs
+                    value = value.Replace("\\r", "\\\\r").Trim();
                 }
+
                 _run = value;
             }
         }
