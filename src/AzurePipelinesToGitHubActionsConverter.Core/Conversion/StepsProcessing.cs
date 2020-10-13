@@ -121,6 +121,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         gitHubStep = CreateXamariniOSStep(step);
                         break;
 
+                    case "6d15af64-176c-496d-b583-fd2ae21d4df4@1": // Checkout step
                     default:
                         gitHubStep = CreateScriptStep("powershell", step);
                         string newYaml = GenericObjectSerialization.SerializeYaml<AzurePipelines.Step>(step);
@@ -467,11 +468,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         {
             string targetType = GetStepInput(step, "targetType");
             string arguments = GetStepInput(step, "arguments");
-
-            if (step.task.ToUpper() == "POWERSHELL@1" || step.task.ToUpper() == "POWERSHELL@2")
-            {
-                var i = 0;
-            }
 
             if (targetType?.ToUpper() == "FILEPATH")
             {
