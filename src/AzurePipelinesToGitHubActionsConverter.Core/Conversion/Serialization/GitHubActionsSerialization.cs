@@ -99,7 +99,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             yaml = yaml.Replace("max-parallel", "max_parallel");
             yaml = yaml.Replace("ref", "_ref");
             yaml = yaml.Replace("continue-on-error", "continue_on_error");
-            yaml = yaml.Replace("timeout-minutes", "timeout_minutes");
 
             return GenericObjectSerialization.DeserializeYaml<GitHubActionsRoot>(yaml);
         }
@@ -113,14 +112,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             yaml = yaml.Replace("runs_on", "runs-on");
             yaml = yaml.Replace("_if", "if");
             yaml = yaml.Replace("timeout_minutes", "timeout-minutes");
-            // yaml = yaml.Replace("pull_request", "pull-request");
             yaml = yaml.Replace("branches_ignore", "branches-ignore");
             yaml = yaml.Replace("paths_ignore", "paths-ignore");
             yaml = yaml.Replace("tags_ignore", "tags-ignore");
             yaml = yaml.Replace("max_parallel", "max-parallel");
             yaml = yaml.Replace("_ref", "ref");
             yaml = yaml.Replace("continue_on_error", "continue-on-error");
-            yaml = yaml.Replace("timeout_minutes", "timeout-minutes");
             yaml = yaml.Replace("step_message:", "#");
             yaml = yaml.Replace("job_message:", "#");
             yaml = yaml.Replace("step_message", "#");
