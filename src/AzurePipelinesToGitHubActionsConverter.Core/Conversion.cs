@@ -217,6 +217,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             //convert the yaml into json, it's easier to parse
             JObject json = null;
+
             if (yaml != null)
             {
                 //Clean up the YAML to remove conditional insert statements
@@ -246,6 +247,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     triggerYaml = ConversionUtility.ProcessNoneJsonElement(triggerYaml);
                     gitHubActions.on = tp.ProcessTriggerV2(triggerYaml);
                 }
+
                 if (json["pr"] != null)
                 {
                     string prYaml = json["pr"].ToString();
@@ -260,6 +262,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         gitHubActions.on.pull_request = prTrigger.pull_request;
                     }
                 }
+
                 if (json["schedules"] != null)
                 {
                     string schedulesYaml = json["schedules"].ToString();
@@ -288,24 +291,27 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                 //Resources
                 string resourcesYaml = json["resources"]?.ToString();
+
                 //Resource Pipelines
                 if (resourcesYaml?.IndexOf("\"pipelines\"") >= 0)
                 {
                     gitHubActions.messages.Add("TODO: Resource pipelines conversion not yet done: https://github.com/samsmithnz/AzurePipelinesToGitHubActionsConverter/issues/8");
                 }
+
                 //Resource Repositories
                 if (resourcesYaml?.IndexOf("\"repositories\"") >= 0)
                 {
                     gitHubActions.messages.Add("TODO: Resource repositories conversion not yet done: https://github.com/samsmithnz/AzurePipelinesToGitHubActionsConverter/issues/8");
                 }
+
                 //Resource Container
                 if (resourcesYaml?.IndexOf("\"containers\"") >= 0)
                 {
                     gitHubActions.messages.Add("TODO: Container conversion not yet done, we need help!: https://github.com/samsmithnz/AzurePipelinesToGitHubActionsConverter/issues/39");
                 }
+
                 //Strategy
                 string strategyYaml = json["strategy"]?.ToString();
-
 
                 //If we have stages, convert them into jobs first:
                 if (json["stages"] != null)
@@ -313,6 +319,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     StagesProcessing sp = new StagesProcessing(_verbose);
                     gitHubActions.jobs = sp.ProcessStagesV2(json["stages"], strategyYaml);
                 }
+
                 //If we don't have stages, but have jobs:
                 else if (json["stages"] == null && json["jobs"] != null)
                 {
@@ -368,6 +375,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         stepComments.Add(ConversionUtility.ConvertMessageToYamlComment(message));
                     }
                 }
+
                 if (gitHubActions?.jobs != null)
                 {
                     //Add each individual step comments
@@ -379,6 +387,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             {
                                 stepComments.Add(ConversionUtility.ConvertMessageToYamlComment(job.Value.job_message));
                             }
+
                             foreach (GitHubActions.Step step in job.Value.steps)
                             {
                                 if (step != null && string.IsNullOrEmpty(step.step_message) == false)
@@ -389,7 +398,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         }
                     }
                 }
-
             }
 
             //Append all of the comments to the top of the file

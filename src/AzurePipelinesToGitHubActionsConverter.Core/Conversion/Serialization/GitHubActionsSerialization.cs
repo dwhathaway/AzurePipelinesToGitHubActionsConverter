@@ -113,7 +113,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             yaml = yaml.Replace("runs_on", "runs-on");
             yaml = yaml.Replace("_if", "if");
             yaml = yaml.Replace("timeout_minutes", "timeout-minutes");
-            yaml = yaml.Replace("pull_request", "pull-request");
+            // yaml = yaml.Replace("pull_request", "pull-request");
             yaml = yaml.Replace("branches_ignore", "branches-ignore");
             yaml = yaml.Replace("paths_ignore", "paths-ignore");
             yaml = yaml.Replace("tags_ignore", "tags-ignore");
