@@ -2,12 +2,15 @@
 using AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization;
 using AzurePipelinesToGitHubActionsConverter.Core.Extensions;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 {
     public class StepsProcessing
     {
+        const string CheckoutStepId = "6D15AF64-176C-496D-B583-FD2AE21D4DF4@1";
+
         //TODO: Add more task types
         public GitHubActions.Step ProcessStep(AzurePipelines.Step step)
         {
@@ -120,8 +123,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     case "XAMARINIOS@2":
                         gitHubStep = CreateXamariniOSStep(step);
                         break;
-
-                    case "6d15af64-176c-496d-b583-fd2ae21d4df4@1": // Checkout step
                     default:
                         gitHubStep = CreateScriptStep("powershell", step);
                         string newYaml = GenericObjectSerialization.SerializeYaml<AzurePipelines.Step>(step);
@@ -530,13 +531,28 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return gitHubStep;
         }
 
-        public GitHubActions.Step CreateCheckoutStep()
+        public GitHubActions.Step CreateCheckoutStep(Dictionary<string, string> checkoutInputs = null)
         {
             //Add the check out step to get the code
-            return new GitHubActions.Step
+            var checkoutStep =  new GitHubActions.Step
             {
+                name = "Checkout repo",
                 uses = "actions/checkout@v2"
             };
+
+            if (checkoutInputs != null)
+            {
+                var repo = GetStepInput(checkoutInputs, "repository");
+
+                if (repo == "self") // defalt is the repo the workflow is running in, so just remove this
+                {
+                    checkoutInputs.Remove("repository");
+                }
+
+                checkoutStep.with = checkoutInputs;
+            }
+
+            return checkoutStep;
         }
 
         public GitHubActions.Step CreateAzureLoginStep()
@@ -1020,7 +1036,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return gitHubStep;
         }
 
-
         public GitHubActions.Step CreateGradleStep(AzurePipelines.Step step)
         {
             //coming from:
@@ -1155,7 +1170,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         //    return gitHubStep;
         //}
-
 
         private GitHubActions.Step CreateAntStep(AzurePipelines.Step step)
         {
@@ -1690,13 +1704,16 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         }
 
         //Safely extract the step input, if it exists
-        private string GetStepInput(AzurePipelines.Step step, string name)
+        private string GetStepInput(AzurePipelines.Step step, string name) => GetStepInput(step.inputs, name);
+
+        private string GetStepInput(Dictionary<string, string> inputs, string name)
         {
             string input = null;
-            if (step.inputs != null && name != null)
+
+            if (inputs != null && name != null)
             {
                 //Extract the input
-                foreach (KeyValuePair<string, string> item in step.inputs)
+                foreach (KeyValuePair<string, string> item in inputs)
                 {
                     //Make the name lowercase to help prevent conflicts later
                     if (item.Key.ToLower() == name.ToLower())
@@ -1706,6 +1723,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     }
                 }
             }
+
             return input;
         }
 
@@ -1716,6 +1734,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             StepsProcessing stepsProcessing = new StepsProcessing();
 
             GitHubActions.Step[] newSteps = null;
+
             if (steps != null)
             {
                 //Start by scanning all of the steps, to see if we need to insert additional tasks
@@ -1725,8 +1744,31 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 bool addAzureLoginStep = false;
                 bool addMSSetupStep = false;
                 string javaVersion = null;
+                Dictionary<string, string> checkoutInputs = null;
 
-                //If the code needs a Checkout step, add it first
+                // Do we have checkout steps showing up as tasks in the job? If so, we'll remove these and map them to the checkout action
+                var checkoutSteps = steps.Where(s => s.task.ToUpper() == CheckoutStepId).ToList();
+
+                if (checkoutSteps.Any())
+                {
+                    // Remove these discrete checkout steps from our step array
+                    steps = steps.Except(checkoutSteps).ToArray();
+
+                    // If a checkout step shows up here as a discrete step, let's grab the params to use for our GH checkout below
+                    var mainCheckout = checkoutSteps.FirstOrDefault(c => GetStepInput(c, "repository") == "self");
+
+                    if (mainCheckout != null)
+                    {
+                        checkoutInputs = mainCheckout.inputs;
+                    }
+                    else if (checkoutSteps.All(c => GetStepInput(c, "repository") == "none"))
+                    {
+                        // If all/the only checkout steps use 'none', then we really dont want to checkout
+                        addCheckoutStep = false;
+                    }
+                }
+
+                // If the code needs a Checkout step, add it first
                 if (addCheckoutStep == true)
                 {
                     stepAdjustment++; // we are inserting a step and need to start moving steps 1 place into the array
@@ -1737,7 +1779,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 {
                     if (step.task != null)
                     {
-                        switch (step.task.ToUpper()) //Set to upper case to handle case sensitivity comparisons e.g. NPM hangles Npm, NPM, or npm. 
+                        switch (step.task.ToUpper()) // Set to upper case to handle case sensitivity comparisons e.g. NPM hangles Npm, NPM, or npm. 
                         {
                             //If we have an Java based step, we will need to add a Java setup step
                             case "ANT@1":
@@ -1798,9 +1840,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 if (addCheckoutStep == true)
                 {
                     //Add the check out step to get the code
-                    newSteps[adjustmentsUsed] = stepsProcessing.CreateCheckoutStep();
+                    newSteps[adjustmentsUsed] = stepsProcessing.CreateCheckoutStep(checkoutInputs);
                     adjustmentsUsed++;
                 }
+
                 if (addJavaSetupStep == true)
                 {
                     //Add the JavaSetup step to the code
@@ -1810,18 +1853,21 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         adjustmentsUsed++;
                     }
                 }
+
                 if (addGradleSetupStep == true)
                 {
                     //Add the Gradle setup step to the code
                     newSteps[adjustmentsUsed] = stepsProcessing.CreateSetupGradleStep();
                     adjustmentsUsed++;
                 }
+
                 if (addAzureLoginStep == true)
                 {
                     //Add the Azure login step to the code
                     newSteps[adjustmentsUsed] = stepsProcessing.CreateAzureLoginStep();
                     adjustmentsUsed++;
                 }
+
                 if (addMSSetupStep == true)
                 {
                     //Add the Azure login step to the code
