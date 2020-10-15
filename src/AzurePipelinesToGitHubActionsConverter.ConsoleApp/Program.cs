@@ -26,10 +26,11 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
         static List<string> _missingConverters = new List<string>();
 
         static int Main(string[] args) {
-            return Parser.Default.ParseArguments<ConvertFileOptions, ExtractAndConvertOptions>(args)
+            return Parser.Default.ParseArguments<ConvertFileOptions, ExtractAndConvertOptions, RunPipelinesOptions>(args)
                 .MapResult(
                     (ConvertFileOptions opts) => ConvertFile(opts),
                     (ExtractAndConvertOptions opts) => ExtractAndConvert(opts),
+                    (RunPipelinesOptions opts) => RunPipelines(opts),
                     errs => 1);
         }
 
@@ -184,7 +185,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                     var repositoryName = yamlPipeline["repository"]["properties"]["shortName"].Value<string>();
 
                     var task1 = adoService.GetPipelineYaml(baseUrl, opts.Account, opts.Project,
-                        opts.PersonalAccessToken, pipelineId, "6.1-preview.1");
+                        opts.PersonalAccessToken, pipelineId, apiVersion: "6.1-preview.1");
 
                     Task.WaitAll(task1);
 
@@ -263,6 +264,150 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                 // the continuationToken is no longer populated in the header
                 continuationToken = response.ContainsKey("continuationToken") ? response["continuationToken"].ToString() : string.Empty;
             } while (!string.IsNullOrWhiteSpace(continuationToken));
+
+            if(_missingConverters.Count > 0)
+            {
+                Console.WriteLine("The following converters required by these pipelines are:");
+                _missingConverters.ForEach((missingConverter) => Console.WriteLine(missingConverter));
+            }
+
+            return retVal;
+        }
+
+        private static int RunPipelines(RunPipelinesOptions opts)
+        {
+            int retVal = 0;
+
+            // Check for a provided baseUrl.  If not provided, default
+            string baseUrl = !string.IsNullOrWhiteSpace(opts.BaseUrl)
+                ? opts.BaseUrl
+                : "dev.azure.com";
+
+            AzureDevOpsService adoService = new AzureDevOpsService();
+
+            string continuationToken = string.Empty;
+
+            List<long> pipelinesToRun = new List<long>();
+
+            if(opts.PipelineIds != null && opts.PipelineIds.Count() > 0)
+            {
+                pipelinesToRun.AddRange(opts.PipelineIds);
+            }
+            else
+            {
+                // Execute a loop
+                do
+                {
+                    // Extract each of the pipelines from the ADO project
+                    var task = adoService.GetBuildDefinitions(baseUrl, opts.Account, opts.Project,
+                        opts.PersonalAccessToken, opts.PipelineIds.ToList(), opts.YamlFilename, 0, continuationToken);
+
+                    Task.WaitAll(task);
+
+                    var response = task.Result;
+
+                    var pipelines = response["value"] as JArray;
+
+                    var yamlPipelines = pipelines.Where((p) => ((JObject)p["process"]).ContainsKey("yamlFilename")).ToList();
+
+                    if (!string.IsNullOrEmpty(opts.RepositoryName))
+                    {
+                        // Filter the list of pipelines by the repository name
+                        yamlPipelines = yamlPipelines.Where((p) =>
+                                p["repository"]["properties"]["shortName"].Value<string>().ToLower() ==
+                                opts.RepositoryName.ToLower())
+                            .ToList();
+                    }
+
+                    if(!string.IsNullOrEmpty(opts.PipelineFolderName))
+                    {
+                        // Filter the list of pipelines by the repository name
+                        yamlPipelines = yamlPipelines.Where((p) =>
+                                p["path"].Value<string>().ToLower() ==
+                                $"{opts.PipelineFolderName.ToLower()}")
+                            .ToList();
+                    }
+
+                    foreach (JObject yamlPipeline in yamlPipelines)
+                    {
+                        var pipelineId = yamlPipeline["id"].Value<long>();
+                        var pipelineName = yamlPipeline["name"].Value<string>();
+                        var repositoryName = yamlPipeline["repository"]["properties"]["shortName"].Value<string>();
+
+                        if(!string.IsNullOrEmpty(opts.AgentPoolName))
+                        {
+                            // If the user defined an agent pool name, then only submit pipelines that are intended to run on that pool
+                            Console.WriteLine($"Retrieving YAML for Pipeline Name: '{pipelineName}', ID: '{pipelineId}'");
+
+                            // Make a call to get the actual YAML - we're going to check to make sure it's queueing against the pool that we want to test with
+                            var task1 = adoService.GetPipelineYaml(baseUrl, opts.Account, opts.Project,
+                                opts.PersonalAccessToken, pipelineId, opts.BranchName, "6.1-preview.1");
+
+                            Task.WaitAll(task1);
+
+                            var pipelineYaml = CleanPrNode(task1.Result);
+
+                            if (string.IsNullOrEmpty(pipelineYaml))
+                            {
+                                Console.WriteLine($"Unable to retrieve YAML for Pipeline Name: '{pipelineName}', ID: '{pipelineId}'");
+                            }
+                            else
+                            {
+                                using (StringReader s = new StringReader(pipelineYaml))
+                                {
+                                    Dictionary<object, object> yamlObject =
+                                        _yamlDeserializer.Deserialize<Dictionary<object, object>>(s);
+
+                                    var serializer = new SerializerBuilder()
+                                        .JsonCompatible()
+                                        .Build();
+
+                                    var json = serializer.Serialize(yamlObject);
+
+                                    var templateAsJObject = JObject.Parse(json);
+
+                                    var poolTokens = templateAsJObject.SelectTokens("$..pool.name").ToList()
+                                        .Where((t) => t.ToString().ToLower() == opts.AgentPoolName.ToLower()).ToList();
+
+                                    Console.WriteLine($"YAML for Pipeline Name: '{pipelineName}', ID: '{pipelineId}' contains {poolTokens.Count} pool nodes with name '{opts.AgentPoolName}'");
+
+                                    if (poolTokens.Count > 0)
+                                        pipelinesToRun.Add(pipelineId);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // No agent pool was specified to filter pipelines on, so submit all pipelines
+                            pipelinesToRun.Add(pipelineId);
+                        }
+                    }
+
+                    // After processing each build, check in the response to see if there's a continuationToken, if there is, call
+                    // the REST API again, passing the token to get the next set of responses.  Repeat in a do/while loop until
+                    // the continuationToken is no longer populated in the header
+                    continuationToken = response.ContainsKey("continuationToken") ? response["continuationToken"].ToString() : string.Empty;
+                } while (!string.IsNullOrWhiteSpace(continuationToken));
+            }
+
+            foreach (var pipelineId in pipelinesToRun)
+            {
+                var task1 = adoService.RunPipeline(baseUrl, opts.Account, opts.Project,
+                    opts.PersonalAccessToken, pipelineId, opts.BranchName, new Dictionary<string, object>(), opts.PreviewRun, "6.1-preview.1");
+
+                Task.WaitAll(task1);
+
+                var responseObject = task1.Result;
+
+                if (responseObject.ContainsKey("createdDate"))
+                {
+                    // Job was successfully submitted
+                    var jobWebLink = responseObject.SelectToken("$..web.href").Value<string>();
+
+                    Console.WriteLine($"Successfully submitted job for Pipeline ID: '{pipelineId}'");
+                    Console.WriteLine(jobWebLink);
+                }
+            }
 
             if(_missingConverters.Count > 0)
             {

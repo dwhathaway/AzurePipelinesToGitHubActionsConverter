@@ -3,8 +3,8 @@ using CommandLine;
 
 namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Commands.Options
 {
-    [Verb("extractAndConvert", HelpText = "Extract 1 or more pipelines from Azure DevOps and convert to GitHub Actions")]
-    public class ExtractAndConvertOptions
+    [Verb("runPipelines", HelpText = "Execute a build against 1 or more existing pipelines")]
+    public class RunPipelinesOptions
     {
         [Option('a', "account", Required = true, HelpText = "The name of the Azure DevOps account")]
         public string Account { get; set; }
@@ -21,19 +21,25 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Commands.Options
         [Option('y', "yamlFilename", Required = false, HelpText = "The name of a specific Pipeline Yaml file to process")]
         public string? YamlFilename { get; set; }
 
+        [Option('b', "branchName", Required = false, HelpText = "The name of the branch that the pipeline should be run using")]
+        public string? BranchName { get; set; }
+
         [Option('u', "baseUrl", Required = false, HelpText = "The base url of your Azure DevOps instance (normally dev.azure.com)")]
         public string? BaseUrl { get; set; }
 
         [Option('r', "repositoryName", Required = false, HelpText = "Only process pipelines for a given repository name")]
         public string? RepositoryName { get; set; }
 
-        [Option('o', "outputFolder", Required = false, HelpText = "The folder path where the .github/workflows folder should be created")]
-        public string? OutputFolder { get; set; }
-
         [Option('f', "pipelineFolderName", Required = false, HelpText = "The folder that the Azure Pipeline is stored in (all others will be ignored)")]
         public string? PipelineFolderName { get; set; }
 
-        [Option('d', "includeIdInFilename", Required = false, Default = false, HelpText = "Whether or not to include the ID of the pipeline in the output file name - useful for processing large projects where multiple repos may reuse the same file name")]
-        public bool? IncludeIdInFilename { get; set; }
+        [Option('v', "variables", Required = false, HelpText = "A list of pipeline variables to use when running the pipeline")]
+        public IEnumerable<string> Variables { get; set; }
+
+        [Option('z', "previewRun", Required = false, Default = false, HelpText = "Whether or not to preview a run")]
+        public bool PreviewRun { get; set; }
+
+        [Option('y', "agentPoolName", Required = false, HelpText = "The name of the agent pool that the job should be run against")]
+        public string AgentPoolName { get; set; }
     }
 }

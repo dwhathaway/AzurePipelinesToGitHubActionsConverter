@@ -123,14 +123,25 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services
         }
 
         public async Task<string> GetPipelineYaml(string baseAddress, string organizationName, string projectName,
-            string personalAccessToken, long pipelineId, string apiVersion = "")
+            string personalAccessToken, long pipelineId, string branchName = "", string apiVersion = "")
         {
-            // Query for a list of Builds > a given date
+            var responseObject = await RunPipeline(baseAddress, organizationName, projectName, personalAccessToken,
+                pipelineId, branchName, null, true, apiVersion);
+
+            var finalYaml = responseObject.ContainsKey("finalYaml")
+                ? responseObject["finalYaml"].Value<string>()
+                : string.Empty;
+
+            return finalYaml;
+        }
+
+        public async Task<JObject> RunPipeline(string baseAddress, string organizationName, string projectName,
+            string personalAccessToken, long pipelineId, string branchName = "", Dictionary<string, object> variables = null, bool previewRun = false, string apiVersion = "" )
+        {
             UriBuilder uriBuilder = new UriBuilder();
             uriBuilder.Scheme = "https";
             uriBuilder.Host = baseAddress;
             uriBuilder.Path = $"{organizationName}/{projectName}/_apis/pipelines/{pipelineId}/runs";
-            // https://dev.azure.com/dev-mc/Minecraft/_apis/pipelines/2225/runs?api-version=6.1-preview.1
 
             // Check to see if the caller has provided an API Version, if not, use the global default version
             apiVersion = string.IsNullOrWhiteSpace(apiVersion) ? _apiVersion : apiVersion;
@@ -142,15 +153,46 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services
 
             uriBuilder.Query = string.Join("&", queryParams);
 
-            var requestBody = "{\"previewRun\": true}";
+            var requestBody = new JObject();
 
-            var result = await SendAsync(HttpMethod.Post, uriBuilder.Uri, requestBody, encodeAuthToken(personalAccessToken), false);
+            // If there are build variables, add them to the body
+            if (variables != null && variables.Count > 0)
+            {
+                JArray variablesArray = new JArray();
+
+                // ToDo: Make sure this is the correct format for the request body
+                foreach (var variable in variables)
+                {
+                    variablesArray.Add(new JObject() { variable.Key, variable.Value.ToString() });
+                }
+
+                requestBody.Add(new JObject() { "variables", variablesArray });
+            }
+
+            if(previewRun)
+                requestBody.Add(new JProperty("previewRun", true));
+
+            if (!string.IsNullOrEmpty(branchName))
+            {
+                // Build up the resources node
+                requestBody.Add(new JProperty("resources",
+                    new JObject(new JProperty("repositories",
+                        new JObject(new JProperty("self",
+                            new JObject( new JProperty("refName", $"refs/heads/{branchName}")
+                            ))
+                        ))
+                    ))
+                );
+            }
+
+            var result = await SendAsync(HttpMethod.Post, uriBuilder.Uri, requestBody.ToString(Formatting.None), encodeAuthToken(personalAccessToken), false);
 
             var json = await result.Content.ReadAsStringAsync();
 
             var responseObject = JObject.Parse(json);
 
-            if (result.StatusCode == HttpStatusCode.BadRequest)
+            // For cases where previewRun == true, we're calling it to get the YAML, so we want to do 1 additional check
+            if (previewRun && result.StatusCode == HttpStatusCode.BadRequest)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine($"Error requesting YAML for Pipeline Id '{pipelineId}'");
@@ -159,11 +201,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services
                 Console.ResetColor();
             }
 
-            var finalYaml = responseObject.ContainsKey("finalYaml")
-                ? responseObject["finalYaml"].Value<string>()
-                : string.Empty;
-
-            return finalYaml;
+            return responseObject;
         }
 
         public async Task<JObject> GetBuilds(string baseAddress, string organizationName, string projectName,
