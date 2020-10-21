@@ -39,8 +39,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             //Fix some variables for serialization, the '-' character is not valid in C# property names, and some of the YAML standard uses reserved words (e.g. if)
             yaml = PrepareYamlPropertiesForGitHubSerialization(yaml);
 
-            //update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
-            yaml = PrepareYamlVariablesForGitHubSerialization(yaml, variablesProcessing, matrixVariableName);
+            //update variables from the $(variableName) format to ${{variableName}} format
+            yaml = variablesProcessing.ProcessVariableConversions(yaml, matrixVariableName);
 
             //If there is a cron in the conversion, we need to do a special processing to remove the quotes. 
             //This is hella custom and ugly, but otherwise the yaml comes out funky
@@ -135,16 +135,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             yaml = yaml.Replace(": >+\r\n      ", ": ");
             yaml = yaml.Replace(": >", ": ");
             yaml = yaml.Replace("#: \n      ", ": ");
-
-            return yaml;
-        }
-
-        private static string PrepareYamlVariablesForGitHubSerialization(string yaml, VariablesProcessing variablesProcessing, string matrixVariableName = null)
-        {
-            // convert variable syntax from ADO -> GH Actions for any still left
-            yaml = variablesProcessing.ProcessVariableConversions(yaml, matrixVariableName);
-            // convert built-in/system vars to GH Actions equivalent
-            yaml = variablesProcessing.ProcessADOtoActionsEnv(yaml);
 
             return yaml;
         }

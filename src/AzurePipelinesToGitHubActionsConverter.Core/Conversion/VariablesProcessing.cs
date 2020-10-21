@@ -14,6 +14,20 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
     {
         private readonly bool _verbose;
         public List<string> VariableList;
+
+        private Dictionary<string, string> SystemVarMapping = new Dictionary<string, string>()
+        {
+            { "Build.BuildId", "github.run_id" },
+            { "Build.BuildNumber", "github.run_number" },
+            { "Build.DefinitionName", "github.workflow" },
+            { "Build.SourcesDirectory", "github.workspace" }, // workspace is shared work folder, may need to create subfolder(s)
+            { "Build.ArtifactStagingDirectory", "github.workspace" }, // workspace is shared work folder, may need to create subfolder(s)
+            { "Build.SourceBranch", "github.ref" },
+            { "Build.SourceBranchName", "github.ref" }, // not exact mapping "main" vs "refs/heads/main"
+            { "Build.RepositoryName", "github.repository" }, // not exact mapping "gitutil" vs "naterickard/gitutil"
+            { "rev:r", "github.run_number" }
+        };
+
         public VariablesProcessing(bool verbose)
         {
             _verbose = verbose;
@@ -375,7 +389,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             // match "var" in ${}, ${{}}, $(), $[], but NOT $var
             var varPattern = string.Format(@"\$(?:\{|\{|\(|\[|\{\{)({0})(?:\}\}|\}|\]|\})?(?:\}\}|\]|\)|\}|\})", var);
 
-            return Regex.Matches(yaml, varPattern);
+            return Regex.Matches(yaml, varPattern, RegexOptions.IgnoreCase);
         }
 
         public string ProcessVariableConversions(string yaml, string matrixVariableName = null)
@@ -385,36 +399,32 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             foreach (Match match in matches)
             {
+                /// actual var name will be returned in grouping 1
                 var varName = match.Groups[1].Value;
-                
-                if (varName != matrixVariableName)
+
+                // Only do replacement if this is one of the vars we've identified... stops false positives like job.status
+                if (VariableList.Contains(varName))
                 {
-                    yaml = yaml.Replace(match.Value, $"${{{{ env.{varName} }}}}");
+                    if (varName != matrixVariableName)
+                    {
+                        yaml = yaml.Replace(match.Value, $"${{{{ env.{varName} }}}}");
+                    }
+                    else // matrix var
+                    {
+                        yaml = yaml.Replace(match.Value, $"${{{{ matrix.{varName} }}}}");
+                    }
                 }
-                else // matrix var
+                else // see if this matches a system var we know how to replace
                 {
-                    yaml = yaml.Replace(match.Value, $"${{{{ matrix.{varName} }}}}");
+                    var systemVar = SystemVarMapping.FirstOrDefault(v => v.Key.ToLower() == varName.ToLower());
+                    yaml = yaml.Replace(match.Value, $"${{{{ {systemVar.Value} }}}}");
                 }
             }
 
+            yaml = yaml.ReplaceAnyCase("${{ env.rev:r }}", "${ GITHUB_RUN_NUMBER }"); // need to verify, moved over from older code; prefer prettier [github.] context usage as below
+            yaml = yaml.ReplaceAnyCase("env.parameters.", "env.");
+            
             return yaml;
-        }
-
-        public string ProcessADOtoActionsEnv(string yaml)
-        {
-            // GitHub Actions-specific env variables need to replace old ADO vars
-            //  We do this AFTER ProcessVariableConversions() bc we can depend on ${{}} formatting
-            return yaml
-                .ReplaceAnyCase("${{ env.rev:r }}", "${ GITHUB_RUN_NUMBER }") // need to verify, moved over from older code; prefer prettier [github.] context usage as below
-                .ReplaceAnyCase("${{ env.Build.BuildId }}", "${{ github.run_id }}")
-                .ReplaceAnyCase("${{ env.Build.BuildNumber }}", "${{ github.run_number }}")
-                .ReplaceAnyCase("${{ env.Build.DefinitionName }}", "${{ github.workflow }}")
-                .ReplaceAnyCase("${{ env.Build.SourcesDirectory }}", "${{ github.workspace }}") // workspace is shared work folder, may need to create subfolder(s)
-                .ReplaceAnyCase("${{ env.Build.ArtifactStagingDirectory }}", "${{ github.workspace }}") // workspace is shared work folder, may need to create subfolder(s)
-                .ReplaceAnyCase("${{ env.Build.SourceBranch }}", "${{ github.ref }}")
-                .ReplaceAnyCase("${{ env.Build.SourceBranchName }}", "${{ github.ref }}") // not exact mapping "main" vs "refs/heads/main"
-                .ReplaceAnyCase("${{ env.Build.RepositoryName }}", "${{ github.repository }}") // not exact mapping "gitutil" vs "naterickard/gitutil"
-                .ReplaceAnyCase("env.parameters.", "env.");            
         }
     }
 }
