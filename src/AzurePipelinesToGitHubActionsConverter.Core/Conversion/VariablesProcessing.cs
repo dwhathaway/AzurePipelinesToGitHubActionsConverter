@@ -380,16 +380,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         public string ProcessVariableConversions(string yaml, string matrixVariableName = null)
         {
-            // return yaml.Replace("$(" + variable + ")", "${{ env." + variable + " }}")  
-            //             .Replace("$( " + variable + " )", "${{ env." + variable + " }}")
-            //             .Replace("$(" + variable + " )", "${{ env." + variable + " }}")
-            //             .Replace("$( " + variable + ")", "${{ env." + variable + " }}")
-            //             .Replace("$" + variable + "", "${{ env." + variable + " }}")
-            //             .Replace("${{" + variable + "}}", "${{ env." + variable + " }}")
-            //             .Replace("${{ " + variable + " }}", "${{ env." + variable + " }}")
-            //             .Replace("${{" + variable + " }}", "${{ env." + variable + " }}")
-            //             .Replace("${{ " + variable + "}}", "${{ env." + variable + " }}");
-
             // Replace variables with the format "${{ [prefix.]MyVar }}"
             var matches = FindPipelineVariables(yaml);
 
@@ -414,12 +404,17 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         {
             // GitHub Actions-specific env variables need to replace old ADO vars
             //  We do this AFTER ProcessVariableConversions() bc we can depend on ${{}} formatting
-            return yaml.Replace("${{ env.rev:r }}", "${ GITHUB_RUN_NUMBER }")
-                        .Replace("${{ env.Build.BuildId }}", "${{ github.run_id }}")
-                        .Replace("${{ env.Build.BuildNumber }}", "${{ github.run_number }}")
-                        .Replace("${{ env.Build.DefinitionName }}", "${{ github.workflow }}")
-                        .Replace("${{ env.Build.SourcesDirectory }}", "${{ github.workspace }}")
-                        .Replace("env.parameters.", "env.");
+            return yaml
+                .ReplaceAnyCase("${{ env.rev:r }}", "${ GITHUB_RUN_NUMBER }") // need to verify, moved over from older code; prefer prettier [github.] context usage as below
+                .ReplaceAnyCase("${{ env.Build.BuildId }}", "${{ github.run_id }}")
+                .ReplaceAnyCase("${{ env.Build.BuildNumber }}", "${{ github.run_number }}")
+                .ReplaceAnyCase("${{ env.Build.DefinitionName }}", "${{ github.workflow }}")
+                .ReplaceAnyCase("${{ env.Build.SourcesDirectory }}", "${{ github.workspace }}") // workspace is shared work folder, may need to create subfolder(s)
+                .ReplaceAnyCase("${{ env.Build.ArtifactStagingDirectory }}", "${{ github.workspace }}") // workspace is shared work folder, may need to create subfolder(s)
+                .ReplaceAnyCase("${{ env.Build.SourceBranch }}", "${{ github.ref }}")
+                .ReplaceAnyCase("${{ env.Build.SourceBranchName }}", "${{ github.ref }}") // not exact mapping "main" vs "refs/heads/main"
+                .ReplaceAnyCase("${{ env.Build.RepositoryName }}", "${{ github.repository }}") // not exact mapping "gitutil" vs "naterickard/gitutil"
+                .ReplaceAnyCase("env.parameters.", "env.");            
         }
     }
 }
