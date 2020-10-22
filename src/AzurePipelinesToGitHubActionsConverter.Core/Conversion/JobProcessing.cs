@@ -20,15 +20,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         public GitHubActions.Job ProcessJob(AzurePipelines.Job job, AzurePipelines.Resources resources)
         {
-            GeneralProcessing generalProcessing = new GeneralProcessing(_verbose);
-            VariablesProcessing vp = new VariablesProcessing(_verbose);
-            StepsProcessing sp = new StepsProcessing();
+            var generalProcessing = new GeneralProcessing(_verbose);
+            var vp = new VariablesProcessing(_verbose);
+            var sp = new StepsProcessing();
 
             GitHubActions.Job newJob = new GitHubActions.Job
             {
                 name = job.displayName,
                 needs = job.dependsOn,
-                _if = ConditionsProcessing.TranslateConditions(job.condition),
+                _if = ConditionsProcessing.TranslateConditions(job.condition, job),
                 runs_on = generalProcessing.ProcessPool(job.pool),
                 strategy = generalProcessing.ProcessStrategy(job.strategy),
                 container = generalProcessing.ProcessContainer(resources),

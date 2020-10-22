@@ -17,6 +17,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private Dictionary<string, string> SystemVarMapping = new Dictionary<string, string>()
         {
+            { "Agent.WorkFolder", "runner.workspace" },
             { "Build.BuildId", "github.run_id" },
             { "Build.BuildNumber", "github.run_number" },
             { "Build.DefinitionName", "github.workflow" },
@@ -40,10 +41,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             if (variables != null)
             {
                 //update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
-                foreach (string item in variables.Keys)
-                {
-                    VariableList.Add(item);
-                }
+                VariableList.AddRange(variables.Keys);
             }
 
             return variables;
@@ -264,10 +262,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         //Search GitHub object for all environment variables
         public void ProcessEnvVars(GitHubActionsRoot gitHubActions)
         {
+            List<KeyValuePair<string, string>> rawEnvValues = null;
+
             // We want to 1) Identify env vars at the workflow, stage/job level(s)
             //  2) Pre-process these var values to see if they refer to other env vars, as the syntax rules are nuanced
             if (gitHubActions.env != null)
             {
+                // grab the initial values here before processing, so we can compare job vs wf level env
+                rawEnvValues = gitHubActions.env.ToList();
+
                 processVarDict(gitHubActions.env);
             }
 
@@ -275,15 +278,36 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 foreach (var job in gitHubActions.jobs)
                 {
-                    processVarDict(job.Value.env);
+                    processVarDict(job.Value.env, rawEnvValues);
+
+                    // no vars left? Remove the table
+                    if (job.Value.env.Count == 0)
+                    {
+                        job.Value.env = null;
+                    }
                 }
             }
         }
 
-        private void processVarDict(Dictionary<string, string> envVarTable)
+        private void processVarDict(Dictionary<string, string> envVarTable, List<KeyValuePair<string, string>> parentVarTable = null)
         {
             if (envVarTable != null)
             {
+                // do we want to filter out env vars that are identical to vars in the parent context? This can easily occur due to templated pipeline conversions
+                if (parentVarTable != null)
+                {
+                    // so, for any 'child' level env vars that also exist at the 'parent' level and contain the same value, let's remove them
+                    var sameVars = envVarTable.Where(v => parentVarTable.Any(pv => pv.Key == v.Key)).ToList();
+
+                    foreach (var sameVar in sameVars)
+                    {
+                        if (sameVar.Value == parentVarTable.FirstOrDefault(pv => pv.Key ==  sameVar.Key).Value)
+                        {
+                            envVarTable.Remove(sameVar.Key);
+                        }
+                    }
+                }
+
                 // add all vars, sans the 'group' reserved key
                 var envVars = envVarTable.Keys.Where(v => v != "group").Distinct().ToList();
 
@@ -417,11 +441,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 else // see if this matches a system var we know how to replace
                 {
                     var systemVar = SystemVarMapping.FirstOrDefault(v => v.Key.ToLower() == varName.ToLower());
-                    yaml = yaml.Replace(match.Value, $"${{{{ {systemVar.Value} }}}}");
+
+                    if (systemVar.Value != null)
+                    {
+                        yaml = yaml.Replace(match.Value, $"${{{{ {systemVar.Value} }}}}");
+                    }
                 }
             }
 
-            yaml = yaml.ReplaceAnyCase("${{ env.rev:r }}", "${ GITHUB_RUN_NUMBER }"); // need to verify, moved over from older code; prefer prettier [github.] context usage as below
+            yaml = yaml.ReplaceAnyCase("${{ env.rev:r }}", "${ GITHUB_RUN_NUMBER }"); // need to verify, moved over from older code; prefer prettier [github.] context usage
             yaml = yaml.ReplaceAnyCase("env.parameters.", "env.");
             
             return yaml;

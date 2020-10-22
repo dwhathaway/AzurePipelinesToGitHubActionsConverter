@@ -7,6 +7,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
     public class StagesProcessing
     {
         private readonly bool _verbose;
+
         public StagesProcessing(bool verbose)
         {
             _verbose = verbose;
@@ -16,6 +17,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         {
             AzurePipelines.Job[] jobs = null;
             List<AzurePipelines.Stage> stages = new List<AzurePipelines.Stage>();
+
             if (stagesJson != null)
             {
                 //for each stage
@@ -27,21 +29,25 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         displayName = stageJson["displayName"]?.ToString(),
                         condition = stageJson["condition"]?.ToString()
                     };
+
                     if (stageJson["dependsOn"] != null)
                     {
                         GeneralProcessing gp = new GeneralProcessing(_verbose);
                         stage.dependsOn = gp.ProcessDependsOnV2(stageJson["dependsOn"].ToString());
                     }
+
                     if (stageJson["variables"] != null)
                     {
                         VariablesProcessing vp = new VariablesProcessing(_verbose);
                         stage.variables = vp.ProcessParametersAndVariablesV2(null, stageJson["variables"].ToString());
                     }
+
                     if (stageJson["jobs"] != null)
                     {
                         JobProcessing jp = new JobProcessing(_verbose);
                         stage.jobs = jp.ExtractAzurePipelinesJobsV2(stageJson["jobs"], strategyYaml);
                     }
+
                     stages.Add(stage);
                 }
 
@@ -49,6 +55,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 if (stages != null)
                 {
                     int jobCount = 0;
+
                     foreach (Stage stage in stages)
                     {
                         if (stage.jobs != null)
@@ -56,10 +63,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             jobCount += stage.jobs.Length;
                         }
                     }
+
                     jobs = new AzurePipelines.Job[jobCount];
 
                     //Giant nested loop ahead. Loop through stages, looking for all jobs
                     int jobIndex = 0;
+
                     foreach (Stage stage in stages)
                     {
                         if (stage.jobs != null)
@@ -67,12 +76,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             for (int i = 0; i < stage.jobs.Length; i++)
                             {
                                 jobs[jobIndex] = stage.jobs[i];
+
                                 if (stage.variables != null)
                                 {
                                     if (jobs[jobIndex].variables == null)
                                     {
                                         jobs[jobIndex].variables = new Dictionary<string, string>();
                                     }
+
                                     foreach (KeyValuePair<string, string> stageVariable in stage.variables)
                                     {
                                         //Add the stage variable if it doesn't already exist
@@ -82,10 +93,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                                         }
                                     }
                                 }
+
                                 if (stage.condition != null)
                                 {
                                     jobs[jobIndex].condition = stage.condition;
                                 }
+
                                 //Get the job name
                                 string jobName = ConversionUtility.GenerateJobName(stage.jobs[i], jobIndex);
                                 //Rename the job, using the stage name as prefix, so that we keep the job names unique
@@ -101,11 +114,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             if (jobs != null)
             {
                 Dictionary<string, GitHubActions.Job> gitHubJobs = new Dictionary<string, GitHubActions.Job>();
+
                 foreach (AzurePipelines.Job job in jobs)
                 {
                     JobProcessing jobProcessing = new JobProcessing(_verbose);
                     gitHubJobs.Add(job.job, jobProcessing.ProcessJob(job, null));
                 }
+
                 return gitHubJobs;
             }
             else
@@ -113,6 +128,5 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 return null;
             }
         }
-
     }
 }
