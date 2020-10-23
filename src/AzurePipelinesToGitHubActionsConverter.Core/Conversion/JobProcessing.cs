@@ -44,18 +44,18 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 //Initialize the array with no items
                 job.steps = new AzurePipelines.Step[0];
-                //Process the steps, adding the default checkout step
+                // Process the steps, adding the default checkout step
                 newJob.steps = sp.AddSupportingSteps(job.steps, vp);
-                //TODO: There is currently no conversion path for templates
+                // TODO: There is currently no conversion path for templates
                 newJob.job_message += "Note: Azure DevOps template does not have an equivalent in GitHub Actions yet";
             }
             else if (newJob.steps == null && job.strategy?.runOnce?.deploy?.steps != null)
             {
                 //Initialize the array with no items
                 job.steps = new AzurePipelines.Step[0];
-                //Process the steps, DO NOT add the default checkout step
+                // Process the steps, DO NOT add the default checkout step
                 newJob.steps = sp.AddSupportingSteps(job.strategy?.runOnce?.deploy?.steps, vp, false);
-                //TODO: There is currently no conversion path for templates
+                // TODO: There is currently no conversion path for templates
                 newJob.job_message += "Note: Azure DevOps strategy>runOnce>deploy does not have an equivalent in GitHub Actions yet";
             }
 

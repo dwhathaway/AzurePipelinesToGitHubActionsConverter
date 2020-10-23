@@ -93,7 +93,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 gitHubActions.on.schedule = schedules;
             }
 
-            //workflow_dispatch trigger
+            // workflow_dispatch trigger
             if (_addWorkflowTrigger)
             {
                 gitHubActions.on = new WorkflowDispatchTrigger(gitHubActions.on);

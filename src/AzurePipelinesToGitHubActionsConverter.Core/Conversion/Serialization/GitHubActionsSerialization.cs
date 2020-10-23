@@ -39,7 +39,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             //Fix some variables for serialization, the '-' character is not valid in C# property names, and some of the YAML standard uses reserved words (e.g. if)
             yaml = PrepareYamlPropertiesForGitHubSerialization(yaml);
 
-            //update variables from the $(variableName) format to ${{variableName}} format
+            // update variables from the $(variableName) format to ${{variableName}} format
             yaml = variablesProcessing.ProcessVariableConversions(yaml, matrixVariableName);
 
             //If there is a cron in the conversion, we need to do a special processing to remove the quotes. 
@@ -67,11 +67,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
                 yaml = processedYaml.ToString();
             }
 
-            //The serialization adds extra new line characters to Multi-line scripts
+            // The serialization adds extra new line characters to Multi-line scripts
             yaml = yaml.Replace("\r\n\r\n", "\r\n");
             yaml = yaml.Replace("\n\n", "\n");
 
-            //Goal: If we have a string with new lines and strings, it double encodes them, so we undo this by changing \\r to \r
+            // Goal: If we have a string with new lines and strings, it double encodes them, so we undo this by changing \\r to \r
             // This Regex will match escaped carriage returns ONLY if they are exactly "\\r" and not \\\\r
             var onlyCRs = @"(?<!\\)\\r";
             yaml = Regex.Replace(yaml, onlyCRs, "\r");
@@ -80,7 +80,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
 
             yaml = yaml.Replace("\\n", "\n");
 
-            //Trim off any leading of trailing new lines 
+            // Trim off any leading of trailing new lines 
             yaml = yaml.TrimStart('\r', '\n');
             yaml = yaml.TrimEnd('\r', '\n');
             yaml = yaml.Trim();
@@ -90,7 +90,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
 
         private static GitHubActionsRoot DeserializeGitHubActionsYaml(string yaml)
         {
-            //Fix some variables that we can't use for property names because the "-" character is not allowed in c# properties, or it's a reserved word (e.g. if)
+            // Fix some variables that we can't use for property names because the "-" character is not allowed in c# properties, or it's a reserved word (e.g. if)
             yaml = yaml.Replace("runs-on", "runs_on");
             yaml = yaml.Replace("if", "_if");
             yaml = yaml.Replace("timeout-minutes", "timeout_minutes");

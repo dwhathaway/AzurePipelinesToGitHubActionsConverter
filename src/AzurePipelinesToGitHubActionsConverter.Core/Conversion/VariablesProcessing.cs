@@ -40,7 +40,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         {
             if (variables != null)
             {
-                //update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
+                // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
                 VariableList.AddRange(variables.Keys);
             }
 
@@ -54,7 +54,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             if (variables != null)
             {
-                //update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
+                // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
                 for (int i = 0; i < variables.Length; i++)
                 {
                     //name/value pairs
@@ -94,7 +94,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             if (variables != null)
             {
-                //update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
+                // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
                 for (int i = 0; i < variables.Count; i++)
                 {
                     //name/value pairs
@@ -134,7 +134,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             if (parameter != null)
             {
-                //update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
+                // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
                 for (int i = 0; i < parameter.Count; i++)
                 {
                     //name/value pairs
@@ -402,16 +402,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         public MatchCollection FindPipelineVariables(string input)
         {
             // match anything in ${}, ${{}}, $(), $[], but NOT $var
-            //  Allowed ADO var chars here: https://docs.microsoft.com/en-us/azure/devops/pipelines/process/variables?view=azure-devops&tabs=yaml%2Cbatch#variable-characters
-            var varPattern = @"\$(?:\{|\{|\(|\[|\{\{)([^\r\n(){}\[\]$]+)(?:\}\}|\}|\]|\})?(?:\}\}|\]|\)|\}|\})";
-
-            return Regex.Matches(input, varPattern);
+            return FindPipelineVariables(input, @"[^\r\n()\{\}\[\]$]+");
         }
 
-        public MatchCollection FindPipelineVariable(string input, string var)
+        public MatchCollection FindPipelineVariables(string input, string varNamePattern)
         {
-            // match "var" in ${}, ${{}}, $(), $[], but NOT $var
-            var varPattern = string.Format(@"\$(?:\{|\{|\(|\[|\{\{)({0})(?:\}\}|\}|\]|\})?(?:\}\}|\]|\)|\}|\})", var);
+            // match "varNamePattern" in ${}, ${{}}, $(), $[], but NOT $var
+            //  Allowed ADO var chars here: https://docs.microsoft.com/en-us/azure/devops/pipelines/process/variables?view=azure-devops&tabs=yaml%2Cbatch#variable-characters
+            var varPattern = @"\$(?:\{|\{|\(|\[|\{\{)(" + varNamePattern + @")(?:\}\}|\}|\]|\})?(?:\}\}|\]|\)|\}|\})";
 
             return Regex.Matches(input, varPattern, RegexOptions.IgnoreCase);
         }
