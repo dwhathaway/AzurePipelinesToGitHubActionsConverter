@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
@@ -6,13 +7,28 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 {
     public static class ConditionsProcessing
     {
-
-        public static string TranslateConditions(string condition)
+        static Dictionary<string, string> operatorMapping = new Dictionary<string, string>()
         {
+            { "eq", "==" },
+            { "ne", "!=" },
+            { "le", "<=" },
+            { "lt", "<" },
+            { "ge", ">=" },
+            { "gt", ">" },
+            { "and", "&&" },
+            { "or", "||" }
+        };
+
+        public static string TranslateConditions(string condition, int depth = 0, object context = null)
+        {
+            // track recursive depth
+            depth++;
+
             if (condition == null)
             {
                 return null;
             }
+
             //Sometimes conditions are spread over multiple lines, we are going to compress this to one line to make the processing easier
             condition = condition.Replace("\r\n", "");
 
@@ -24,33 +40,46 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             //Examine the contents for last set of contents, the most complete piece of the contents, to get the keywords, recursively, otherwise, convert the contents to GitHub
             string contents = contentList[contentList.Count - 1];
             string conditionKeyWord = condition.Replace("(" + contents + ")", "").Trim();
+
             if (contents.IndexOf("(") >= 0)
             {
                 //Need to count the number "(" brackets. If it's > 1, then iterate until we get to one.
                 int bracketsCount = CountCharactersInString(contents, ')');
+
                 if (bracketsCount > 1)
                 {
                     //Split the strings by "," - but also respecting brackets
                     List<string> innerContents = SplitContents(contents);
                     string innerContentsProcessed = "";
+
                     for (int i = 0; i < innerContents.Count; i++)
                     {
                         string innerContent = innerContents[i];
-                        innerContentsProcessed += TranslateConditions(innerContent);
+                        innerContentsProcessed += TranslateConditions(innerContent, depth, context);
+
                         if (i != innerContents.Count - 1)
                         {
                             innerContentsProcessed += ",";
                         }
                     }
+
                     contents = innerContentsProcessed;
                 }
             }
 
             //Join the pieces back together again
-            processedCondition += ProcessCondition(conditionKeyWord, contents);
+            processedCondition += ProcessCondition(conditionKeyWord, contents, context);
 
             //Translate any system variables
             processedCondition = ProcessVariables(processedCondition);
+
+            depth--;
+
+            // returning our compound condition - if we're top level, we'll remove any grouping ()
+            if (depth == 0 && processedCondition.StartsWith("(") && processedCondition.EndsWith(")"))
+            {
+                return processedCondition.Substring(1, processedCondition.Length - 2);
+            }
 
             return processedCondition;
         }
@@ -70,11 +99,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return condition;
         }
 
-        private static string ProcessCondition(string condition, string contents)
+        private static string ProcessCondition(string condition, string contents, object context = null)
         {
-            switch (condition.Trim())
+            condition = condition.Trim();
+
+            switch (condition)
             {
-                //Job/step status check functions: 
+                //Job/step status check functions:
                 //Azure DevOps: https://docs.microsoft.com/en-us/azure/devops/pipelines/process/expressions?view=azure-devops#job-status-functions
                 //GitHub Actions: https://help.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#job-status-check-functions
                 case "always":
@@ -85,20 +116,31 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 case "succeeded":
                     return "success(" + contents + ")";
                 case "succeededOrFailed": //Essentially the same as "always", but not cancelled
-                    return "ne(${{ job.status }}, 'cancelled')";
+
+                    // Job level conditions do not allow access to the job context, oddly enough
+                    if (context is AzurePipelines.Job)
+                    {
+                        return "(success() || failure())";
+                    }
+                    else
+                    {
+                        return "job.status != 'cancelled'";
+                    }
 
                 //Functions: 
                 //Azure DevOps: https://docs.microsoft.com/en-us/azure/devops/pipelines/process/expressions?view=azure-devops#functions
                 //GitHub Actions: https://help.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#functions
+                case "eq": //eq
+                case "ne": //ne
                 case "le": //le
                 case "lt": //lt
-                case "ne": //ne
-                case "not": //not
                 case "ge": //ge
                 case "gt": //gt
-                case "eq": //eq
+                    return translateOperator(operatorMapping[condition], contents, 2);
                 case "and": //and
                 case "or": //or
+                    return translateOperator(operatorMapping[condition], contents, group: true);
+                case "not": //not
                 case "contains": //contains( search, item )
                 case "coalesce": //coalesce
                 case "containsValue": //containsValue
@@ -117,11 +159,38 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
         }
 
+        private static string translateOperator(string op, string contents, int operandsNeeded = 0, bool group = false)
+        {
+            var comparisonParts = SplitContents(contents);
+
+            if (operandsNeeded > 0 && comparisonParts.Count != operandsNeeded)
+            {
+                throw new Exception($"Expected {operandsNeeded} parts but found {comparisonParts.Count}");
+            }
+
+            var sb = new StringBuilder(group ? "(" : string.Empty);
+
+            for (int i = 0; i < comparisonParts.Count; i++)
+            {
+                if (i != comparisonParts.Count - 1)
+                {
+                    sb.AppendFormat("{0} {1} ", comparisonParts[i].Trim(), op);
+                }
+                else
+                {
+                    sb.AppendFormat("{0}{1}", comparisonParts[i].Trim(), group ? ")" : string.Empty);
+                }
+            }
+
+            return sb.ToString().Trim();
+        }
+
         //Public so that it can be unit tested
         public static List<string> FindBracketedContentsInString(string text)
         {
             IEnumerable<string> results = Nested(text);
             List<string> list = results.ToList<string>();
+
             //Remove the last item - that is the current item we don't need
             if (list.Count > 1)
             {
@@ -168,25 +237,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return text.Count(x => x == character);
         }
 
-
-        //////RegEx cannot handle nested brackets, so this first version doesn't work
-        //public static List<string> SplitContents(string text)
-        //{
-        //    MatchCollection results = Regex.Matches(text, @",(?![^\(\[]*[\]\)])");
-        //    List<string> list = new List<string>();
-        //    int startIndex = 0;
-        //    int endIndex;
-        //    foreach (Match result in results)
-        //    {
-        //        endIndex = result.Index;
-        //        list.Add(text.Substring(startIndex, (endIndex - startIndex)).Trim());
-        //        startIndex = result.Index + 1;
-        //    }
-        //    endIndex = text.Length;
-        //    list.Add(text.Substring(startIndex, (endIndex - startIndex)).Trim());
-        //    return list;
-        //}
-
         //Public so that it can be unit tested
         //Takes a string, and splits it by commas, respecting(). For example,
         //the string "eq('ABCDE', 'BCD'), ne(0, 1)", is split into "eq('ABCDE', 'BCD')" and "ne(0, 1)"
@@ -224,10 +274,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     sb.Append(nextChar);
                 }
             }
+
             list.Add(sb.ToString());
 
             return list;
         }
-
     }
 }
