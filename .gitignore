@@ -332,4 +332,7 @@ ASALocalRun/
 .mfractor/
 
 # ignore all generated yaml files
-Minecraftpe/
+output/
+
+# Mac
+.DS_Store

@@ -141,7 +141,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
             // Check if an output path was provided.  If not, default one and notify the user
             if (string.IsNullOrWhiteSpace(outputBasePath))
             {
-                outputBasePath = Directory.GetCurrentDirectory();
+                outputBasePath = Path.Combine(Directory.GetCurrentDirectory(), "output");
                 Console.WriteLine($"'outputPath' not provided, defaulting to '{outputBasePath}'");
             }
 
