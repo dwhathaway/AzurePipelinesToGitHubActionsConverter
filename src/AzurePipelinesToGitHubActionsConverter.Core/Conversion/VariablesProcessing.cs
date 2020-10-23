@@ -446,6 +446,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         yaml = yaml.Replace(match.Value, $"${{{{ {systemVar.Value} }}}}");
                     }
+                    else // not a var we've defined or a known system var, but we'll convert the syntax
+                    {
+                        yaml = yaml.Replace(match.Value, $"${{{{ env.{varName} }}}}");
+                    }
                 }
             }
 
