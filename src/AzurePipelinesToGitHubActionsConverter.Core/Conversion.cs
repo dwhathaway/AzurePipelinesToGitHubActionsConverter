@@ -448,13 +448,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             if (azurePipelinesJob != null && azurePipelinesJob.steps != null && azurePipelinesJob.steps.Length > 0)
             {
+                var vp = new VariablesProcessing(_verbose);
                 //As we needed to create an entire (but minimal) pipelines job, we need to now extract the step for processing
                 StepsProcessing stepsProcessing = new StepsProcessing();
-                gitHubActionStep = stepsProcessing.ProcessStep(azurePipelinesJob.steps[0]);
+                gitHubActionStep = stepsProcessing.ProcessStep(azurePipelinesJob.steps[0], vp);
 
                 //Find all variables in this text block, we need this for a bit later
                 var variables = new Dictionary<object, List<string>>();
-                var vp = new VariablesProcessing(_verbose);
 
                 //Create the GitHub YAML and apply some adjustments
                 if (gitHubActionStep != null)

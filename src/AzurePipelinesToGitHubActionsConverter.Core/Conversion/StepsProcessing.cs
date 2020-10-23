@@ -12,12 +12,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         const string CheckoutStepId = "6D15AF64-176C-496D-B583-FD2AE21D4DF4@1";
 
         //TODO: Add more task types
-        public GitHubActions.Step ProcessStep(AzurePipelines.Step step)
+        public GitHubActions.Step ProcessStep(AzurePipelines.Step step, VariablesProcessing variablesProcessing)
         {
             GitHubActions.Step gitHubStep = null;
+
             if (step.task != null)
             {
                 step = CleanStepInputs(step);
+
                 //TODO: Should we be handling versions seperately? Currently the version is bundled with the step name
                 switch (step.task.ToUpper()) //Set to upper case to handle case sensitivity comparisons e.g. NPM hangles Npm, NPM, or npm. 
                 {
@@ -131,15 +133,18 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         string newYaml = GenericObjectSerialization.SerializeYaml<AzurePipelines.Step>(step);
                         string[] newYamlSplit = newYaml.Split(System.Environment.NewLine);
                         StringBuilder yamlBuilder = new StringBuilder();
+
                         for (int i = 0; i < newYamlSplit.Length; i++)
                         {
                             string line = newYamlSplit[i];
+                            
                             if (line.Trim().Length > 0)
                             {
                                 yamlBuilder.Append("#");
                                 yamlBuilder.Append(line);
                             }
                         }
+
                         gitHubStep.step_message = "Note: Error! This step does not have a conversion path yet: " + step.task;
                         gitHubStep.run = "Write-Host " + gitHubStep.step_message + " " + yamlBuilder.ToString();
                         break;
@@ -183,10 +188,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 {
                     gitHubStep.name = step.displayName;
                 }
+
                 if (step.condition != null)
                 {
-                    gitHubStep._if = ConditionsProcessing.TranslateConditions(step.condition);
+                    gitHubStep._if = ConditionsProcessing.TranslateConditions(step.condition, variablesProcessing);
                 }
+
                 //Double check the with. Sometimes we start to add a property, but for various reasons, we don't use it, and have to null out the with so it doesn't display an empty node in the final yaml
                 if (gitHubStep.with != null)
                 {
@@ -194,6 +201,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         //Look to see if there is non-null data in the collection
                         bool foundData = false;
+
                         foreach (KeyValuePair<string, string> item in gitHubStep.with)
                         {
                             //If data was found, break out of the loop, we don't need to look anymore
@@ -203,6 +211,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                                 break;
                             }
                         }
+
                         //If no data was found, null out the with property
                         if (foundData == false)
                         {
@@ -210,12 +219,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         }
                     }
                 }
+
                 gitHubStep.continue_on_error = step.continueOnError;
+
                 if (step.timeoutInMinutes != 0)
                 {
                     gitHubStep.timeout_minutes = step.timeoutInMinutes;
                 }
             }
+
             return gitHubStep;
         }
 
@@ -223,12 +235,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         private AzurePipelines.Step CleanStepInputs(AzurePipelines.Step step)
         {
             Dictionary<string, string> newInputs = new Dictionary<string, string>();
+
             if (step.inputs != null)
             {
                 foreach (KeyValuePair<string, string> item in step.inputs)
                 {
                     newInputs.Add(item.Key.ToLower(), item.Value);
                 }
+
                 step.inputs = newInputs;
             }
 
@@ -517,13 +531,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     }
                 }
             }
+
             if (gitHubStep.shell == "")
             {
                 gitHubStep.shell = null;
-            }
-            if (step.condition != null)
-            {
-                gitHubStep._if = ConditionsProcessing.TranslateConditions(step.condition);
             }
 
             if (gitHubStep.run?.Contains("\\\\r") ?? false)
@@ -1732,7 +1743,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         //Some pipelines need supporting steps as part of the processing. 
         //For example, if we are deploying to Azure, we need to add an Azure Login step
-        public GitHubActions.Step[] AddSupportingSteps(AzurePipelines.Step[] steps, bool addCheckoutStep = true)
+        public GitHubActions.Step[] AddSupportingSteps(AzurePipelines.Step[] steps, VariablesProcessing variablesProcessing, bool addCheckoutStep = true)
         {
             StepsProcessing stepsProcessing = new StepsProcessing();
 
@@ -1881,7 +1892,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 //Translate the other steps
                 for (int i = stepAdjustment; i < steps.Length + stepAdjustment; i++)
                 {
-                    newSteps[i] = stepsProcessing.ProcessStep(steps[i - stepAdjustment]);
+                    newSteps[i] = stepsProcessing.ProcessStep(steps[i - stepAdjustment], variablesProcessing);
                 }
             }
 

@@ -399,21 +399,21 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return list;
         }
 
-        public MatchCollection FindPipelineVariables(string yaml)
+        public MatchCollection FindPipelineVariables(string input)
         {
             // match anything in ${}, ${{}}, $(), $[], but NOT $var
             //  Allowed ADO var chars here: https://docs.microsoft.com/en-us/azure/devops/pipelines/process/variables?view=azure-devops&tabs=yaml%2Cbatch#variable-characters
             var varPattern = @"\$(?:\{|\{|\(|\[|\{\{)([^\r\n(){}\[\]$]+)(?:\}\}|\}|\]|\})?(?:\}\}|\]|\)|\}|\})";
 
-            return Regex.Matches(yaml, varPattern);
+            return Regex.Matches(input, varPattern);
         }
 
-        public MatchCollection FindPipelineVariable(string yaml, string var)
+        public MatchCollection FindPipelineVariable(string input, string var)
         {
             // match "var" in ${}, ${{}}, $(), $[], but NOT $var
             var varPattern = string.Format(@"\$(?:\{|\{|\(|\[|\{\{)({0})(?:\}\}|\}|\]|\})?(?:\}\}|\]|\)|\}|\})", var);
 
-            return Regex.Matches(yaml, varPattern, RegexOptions.IgnoreCase);
+            return Regex.Matches(input, varPattern, RegexOptions.IgnoreCase);
         }
 
         public string ProcessVariableConversions(string yaml, string matrixVariableName = null)
@@ -453,6 +453,32 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             yaml = yaml.ReplaceAnyCase("env.parameters.", "env.");
             
             return yaml;
+        }
+
+        public string ProcessIndexedVariables(string input)
+        {
+            // Find indexed var usage, i.e. variables['MyVar']
+            var varFormat = "variables[";
+            var varStart = input.IndexOf(varFormat);
+
+            while (varStart >= 0)
+            {
+                var varEnd = input.IndexOf(']', varStart);
+
+                if (varEnd >= 0)
+                {
+                    var nameStart = varStart + varFormat.Length + 1;
+                    var nameEnd = varEnd - nameStart - 1;
+                    var varName = input.Substring(nameStart, nameEnd);
+
+                    input = input.Remove(varStart, varEnd - varStart + 1);
+                    input = input.Insert(varStart, $"env['{varName}']");
+                }
+
+                varStart = input.IndexOf(varFormat, varStart + 1);
+            }
+
+            return input;
         }
     }
 }

@@ -19,7 +19,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             { "or", "||" }
         };
 
-        public static string TranslateConditions(string condition, int depth = 0, object context = null)
+        public static string TranslateConditions(string condition, VariablesProcessing vp, int depth = 0, object context = null)
         {
             // track recursive depth
             depth++;
@@ -55,7 +55,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     for (int i = 0; i < innerContents.Count; i++)
                     {
                         string innerContent = innerContents[i];
-                        innerContentsProcessed += TranslateConditions(innerContent, depth, context);
+                        innerContentsProcessed += TranslateConditions(innerContent, vp, depth, context);
 
                         if (i != innerContents.Count - 1)
                         {
@@ -72,6 +72,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             //Translate any system variables
             processedCondition = ProcessVariables(processedCondition);
+
+            // change conditions to use env[''] syntax instead of variables['']
+            processedCondition = vp.ProcessIndexedVariables(processedCondition);
 
             depth--;
 

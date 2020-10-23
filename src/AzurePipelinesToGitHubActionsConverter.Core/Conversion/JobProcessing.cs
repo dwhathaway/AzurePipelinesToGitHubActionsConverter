@@ -28,13 +28,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 name = job.displayName,
                 needs = job.dependsOn,
-                _if = ConditionsProcessing.TranslateConditions(job.condition, context: job),
+                _if = ConditionsProcessing.TranslateConditions(job.condition, vp, context: job),
                 runs_on = generalProcessing.ProcessPool(job.pool),
                 strategy = generalProcessing.ProcessStrategy(job.strategy),
                 container = generalProcessing.ProcessContainer(resources),
                 env = vp.ProcessSimpleVariables(job.variables),
                 timeout_minutes = job.timeoutInMinutes,
-                steps = sp.AddSupportingSteps(job.steps)
+                steps = sp.AddSupportingSteps(job.steps, vp)
             };
 
             MatrixVariableName = generalProcessing.MatrixVariableName;
@@ -45,7 +45,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 //Initialize the array with no items
                 job.steps = new AzurePipelines.Step[0];
                 //Process the steps, adding the default checkout step
-                newJob.steps = sp.AddSupportingSteps(job.steps);
+                newJob.steps = sp.AddSupportingSteps(job.steps, vp);
                 //TODO: There is currently no conversion path for templates
                 newJob.job_message += "Note: Azure DevOps template does not have an equivalent in GitHub Actions yet";
             }
@@ -54,7 +54,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 //Initialize the array with no items
                 job.steps = new AzurePipelines.Step[0];
                 //Process the steps, DO NOT add the default checkout step
-                newJob.steps = sp.AddSupportingSteps(job.strategy?.runOnce?.deploy?.steps, false);
+                newJob.steps = sp.AddSupportingSteps(job.strategy?.runOnce?.deploy?.steps, vp, false);
                 //TODO: There is currently no conversion path for templates
                 newJob.job_message += "Note: Azure DevOps strategy>runOnce>deploy does not have an equivalent in GitHub Actions yet";
             }
@@ -76,7 +76,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         {
             if (jobs != null)
             {
-                Dictionary<string, GitHubActions.Job> gitHubJobs = new Dictionary<string, GitHubActions.Job>();
+                var gitHubJobs = new Dictionary<string, GitHubActions.Job>();
                 int i = 0;
                 
                 foreach (AzurePipelines.Job job in jobs)
@@ -107,8 +107,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         public AzurePipelines.Job[] ExtractAzurePipelinesJobsV2(JToken jobsJson, string strategyYaml)
         {
-            GeneralProcessing gp = new GeneralProcessing(_verbose);
-            AzurePipelines.Job[] jobs = new AzurePipelines.Job[jobsJson.Count()];
+            var gp = new GeneralProcessing(_verbose);
+            var vp = new VariablesProcessing(_verbose);
+            var jobs = new AzurePipelines.Job[jobsJson.Count()];
 
             if (jobsJson != null)
             {
@@ -145,7 +146,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                     if (jobJson["condition"] != null)
                     {
-                        job.condition = ConditionsProcessing.TranslateConditions(jobJson["condition"].ToString());
+                        job.condition = ConditionsProcessing.TranslateConditions(jobJson["condition"].ToString(), vp);
                     }
 
                     if (jobJson["environment"] != null)
@@ -171,7 +172,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                     if (jobJson["variables"] != null)
                     {
-                        VariablesProcessing vp = new VariablesProcessing(_verbose);
                         job.variables = vp.ProcessParametersAndVariablesV2(null, jobJson["variables"].ToString());
                     }
 

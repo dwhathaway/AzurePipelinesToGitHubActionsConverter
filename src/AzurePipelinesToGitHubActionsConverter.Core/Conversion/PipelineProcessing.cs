@@ -46,6 +46,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             //Triggers for pushs 
             TriggerProcessing tp = new TriggerProcessing(_verbose);
+            
             if (azurePipeline.trigger != null)
             {
                 if (complexTrigger != null)
@@ -62,6 +63,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             if (azurePipeline.pr != null)
             {
                 GitHubActions.Trigger pr = tp.ProcessPullRequest(azurePipeline.pr);
+
                 if (gitHubActions.on == null)
                 {
                     gitHubActions.on = pr;
@@ -82,10 +84,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             if (azurePipeline.schedules != null)
             {
                 string[] schedules = tp.ProcessSchedules(azurePipeline.schedules);
+
                 if (gitHubActions.on == null)
                 {
                     gitHubActions.on = new GitHubActions.Trigger();
                 }
+
                 gitHubActions.on.schedule = schedules;
             }
 
@@ -110,34 +114,39 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         {
                             ConversionUtility.WriteLine("pipeline: " + azurePipeline.resources.pipelines[0].pipeline, _verbose);
                         }
+
                         if (azurePipeline.resources.pipelines[0].project != null)
                         {
                             ConversionUtility.WriteLine("project: " + azurePipeline.resources.pipelines[0].project, _verbose);
                         }
+
                         if (azurePipeline.resources.pipelines[0].source != null)
                         {
                             ConversionUtility.WriteLine("source: " + azurePipeline.resources.pipelines[0].source, _verbose);
                         }
+
                         if (azurePipeline.resources.pipelines[0].branch != null)
                         {
                             ConversionUtility.WriteLine("branch: " + azurePipeline.resources.pipelines[0].branch, _verbose);
                         }
+
                         if (azurePipeline.resources.pipelines[0].version != null)
                         {
                             ConversionUtility.WriteLine("version: " + azurePipeline.resources.pipelines[0].version, _verbose);
                         }
+
                         if (azurePipeline.resources.pipelines[0].trigger != null)
                         {
                             if (azurePipeline.resources.pipelines[0].trigger.autoCancel)
                             {
                                 ConversionUtility.WriteLine("autoCancel: " + azurePipeline.resources.pipelines[0].trigger.autoCancel, _verbose);
                             }
+
                             if (azurePipeline.resources.pipelines[0].trigger.batch)
                             {
                                 ConversionUtility.WriteLine("batch: " + azurePipeline.resources.pipelines[0].trigger.batch, _verbose);
                             }
                         }
-
                     }
                 }
 
@@ -152,26 +161,32 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         {
                             ConversionUtility.WriteLine("repository: " + azurePipeline.resources.repositories[0].repository, _verbose);
                         }
+
                         if (azurePipeline.resources.repositories[0].type != null)
                         {
                             ConversionUtility.WriteLine("type: " + azurePipeline.resources.repositories[0].type, _verbose);
                         }
+
                         if (azurePipeline.resources.repositories[0].name != null)
                         {
                             ConversionUtility.WriteLine("name: " + azurePipeline.resources.repositories[0].name, _verbose);
                         }
+
                         if (azurePipeline.resources.repositories[0]._ref != null)
                         {
                             ConversionUtility.WriteLine("ref: " + azurePipeline.resources.repositories[0]._ref, _verbose);
                         }
+
                         if (azurePipeline.resources.repositories[0].endpoint != null)
                         {
                             ConversionUtility.WriteLine("endpoint: " + azurePipeline.resources.repositories[0].endpoint, _verbose);
                         }
+
                         if (azurePipeline.resources.repositories[0].connection != null)
                         {
                             ConversionUtility.WriteLine("connection: " + azurePipeline.resources.repositories[0].connection, _verbose);
                         }
+
                         if (azurePipeline.resources.repositories[0].source != null)
                         {
                             ConversionUtility.WriteLine("source: " + azurePipeline.resources.repositories[0].source, _verbose);
@@ -185,6 +200,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 //Count the number of jobs and initialize the jobs array with that number
                 int jobCounter = 0;
+
                 foreach (Stage stage in azurePipeline.stages)
                 {
                     if (stage.jobs != null)
@@ -192,14 +208,17 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         jobCounter += stage.jobs.Length;
                     }
                 }
+
                 azurePipeline.jobs = new AzurePipelines.Job[jobCounter];
                 //We are going to take each stage and assign it a set of jobs
                 int currentIndex = 0;
+
                 foreach (Stage stage in azurePipeline.stages)
                 {
                     if (stage.jobs != null)
                     {
                         int j = 0;
+
                         for (int i = 0; i < stage.jobs.Length; i++)
                         {
                             //Get the job name
@@ -209,15 +228,18 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             ConversionUtility.WriteLine("This variable is not needed in actions: " + stage.displayName, _verbose);
                             azurePipeline.jobs[currentIndex] = stage.jobs[j];
                             azurePipeline.jobs[currentIndex].condition = stage.condition;
+
                             //Move over the variables, the stage variables will need to be applied to each job
                             if (stage.variables != null && stage.variables.Count > 0)
                             {
                                 azurePipeline.jobs[currentIndex].variables = new Dictionary<string, string>();
+
                                 foreach (KeyValuePair<string, string> stageVariable in stage.variables)
                                 {
                                     azurePipeline.jobs[currentIndex].variables.Add(stageVariable.Key, stageVariable.Value);
                                 }
                             }
+
                             j++;
                             currentIndex++;
                         }
@@ -240,6 +262,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         }
                     }
                 }
+
                 gitHubActions.jobs = ProcessJobs(azurePipeline.jobs, azurePipeline.resources);
 
                 if (gitHubActions.jobs.Count == 0)
@@ -248,11 +271,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
+            var vp = new VariablesProcessing(_verbose);
+
             //Pool + Steps (When there are no jobs defined)
             if ((azurePipeline.pool != null && azurePipeline.jobs == null) || (azurePipeline.steps != null && azurePipeline.steps.Length > 0))
             {
                 //Steps only have one job, so we just create it here
                 StepsProcessing sp = new StepsProcessing();
+
                 gitHubActions.jobs = new Dictionary<string, GitHubActions.Job>
                 {
                     {
@@ -263,15 +289,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             strategy = generalProcessing.ProcessStrategy(azurePipeline.strategy),
                             container = generalProcessing.ProcessContainer(azurePipeline.resources),
                             //resources = ProcessResources(azurePipeline.resources),
-                            steps = sp.AddSupportingSteps(azurePipeline.steps)
+                            steps = sp.AddSupportingSteps(azurePipeline.steps, vp)
                         }
                     }
                 };
+
                 MatrixVariableName = generalProcessing.MatrixVariableName;
             }
 
             //Variables
-            VariablesProcessing vp = new VariablesProcessing(_verbose);
             if (azurePipeline.variables != null)
             {
                 if (complexVariables != null)
@@ -294,20 +320,21 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return gitHubActions;
         }
 
-
-
         //process the jobs
         private Dictionary<string, GitHubActions.Job> ProcessJobs(AzurePipelines.Job[] jobs, Resources resources)
         {
             //A dictonary is perfect here, as the job_id (a string), must be unique in the action
             Dictionary<string, GitHubActions.Job> newJobs = null;
+
             if (jobs != null)
             {
                 JobProcessing jobProcessing = new JobProcessing(_verbose);
                 newJobs = new Dictionary<string, GitHubActions.Job>();
+
                 for (int i = 0; i < jobs.Length; i++)
                 {
                     string jobName = jobs[i].job;
+
                     if (jobName == null && jobs[i].deployment != null)
                     {
                         jobName = jobs[i].deployment;
@@ -316,13 +343,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         jobName = "job_" + (i + 1).ToString() + "_template";
                     }
+
                     newJobs.Add(jobName, jobProcessing.ProcessJob(jobs[i], resources));
                     MatrixVariableName = jobProcessing.MatrixVariableName;
                     VariableList.AddRange(jobProcessing.VariableList);
                 }
             }
+
             return newJobs;
         }
-
     }
 }
