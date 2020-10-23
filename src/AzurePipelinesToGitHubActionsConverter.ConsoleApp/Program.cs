@@ -84,7 +84,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                     {
                         Console.WriteLine(comment);
 
-                        if(comment.Contains("#Note: Error! This step does not have a conversion path yet")
+                        if (comment.Contains("#Note: Error! This step does not have a conversion path yet")
                             && !_missingConverters.Contains(comment))
                             _missingConverters.Add(comment);
                     });
@@ -114,7 +114,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                 retVal = -1;
             }
 
-            if(_missingConverters.Count > 0)
+            if (_missingConverters.Count > 0)
             {
                 Console.WriteLine("The following converters required by these pipelines are:");
                 _missingConverters.ForEach((missingConverter) => Console.Write(missingConverter));
@@ -169,7 +169,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                         .ToList();
                 }
 
-                if(!string.IsNullOrEmpty(opts.PipelineFolderName))
+                if (!string.IsNullOrEmpty(opts.PipelineFolderName))
                 {
                     // Filter the list of pipelines by the repository name
                     yamlPipelines = yamlPipelines.Where((p) =>
@@ -190,7 +190,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
 
                     var pipelineYaml = CleanPrNode(task1.Result);
 
-                    if(!string.IsNullOrWhiteSpace(pipelineYaml))
+                    if (!string.IsNullOrWhiteSpace(pipelineYaml))
                     {
                         var yamlFullFilename = yamlPipeline["process"]["yamlFilename"].Value<string>();
                         var yamlFilename = yamlFullFilename.Split('/').Last();
@@ -226,7 +226,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                                 {
                                     Console.WriteLine(comment);
 
-                                    if(comment.Contains("#Note: Error! This step does not have a conversion path yet")
+                                    if (comment.Contains("#Note: Error! This step does not have a conversion path yet")
                                        && !_missingConverters.Contains(comment))
                                         _missingConverters.Add(comment);
                                 });
@@ -264,7 +264,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                 continuationToken = response.ContainsKey("continuationToken") ? response["continuationToken"].ToString() : string.Empty;
             } while (!string.IsNullOrWhiteSpace(continuationToken));
 
-            if(_missingConverters.Count > 0)
+            if (_missingConverters.Count > 0)
             {
                 Console.WriteLine("The following converters required by these pipelines are:");
                 _missingConverters.ForEach((missingConverter) => Console.WriteLine(missingConverter));
@@ -282,7 +282,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
         {
             string fixedPipelineYaml = string.Empty;
 
-            if(!string.IsNullOrEmpty(pipelineYaml))
+            if (!string.IsNullOrEmpty(pipelineYaml))
             {
                 // Hack alert - pipelines that define the pr trigger as pr: none
                 // returns as pr: enabled: false from this call - we need to fix this for transformation purposes
@@ -300,7 +300,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
 
                     var jsonObject = JObject.Parse(json);
 
-                    if(jsonObject.ContainsKey("pr"))
+                    if (jsonObject.ContainsKey("pr"))
                     {
                         if (!jsonObject["pr"]["enabled"].Value<bool>())
                             jsonObject["pr"] = "none";
