@@ -26,7 +26,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services
         }
 
         public async Task<JObject> GetBuildDefinition(string baseAddress, string organizationName, string projectName,
-            string personalAccessToken, long? definitionId, string? continuationToken = null, string apiVersion = "")
+            string personalAccessToken, long? definitionId, string continuationToken = null, string apiVersion = "")
         {
             // Query the details of a give build definition
             UriBuilder uriBuilder = new UriBuilder();
@@ -66,8 +66,8 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services
         }
 
         public async Task<JObject> GetBuildDefinitions(string baseAddress, string organizationName, string projectName,
-            string personalAccessToken, List<long>? definitionIds = default(List<long>), string? yamlFilename = "", int top = 0,
-            string? continuationToken = null, string apiVersion = "")
+            string personalAccessToken, List<long> definitionIds = default(List<long>), string yamlFilename = "", int top = 0,
+            string continuationToken = null, string apiVersion = "")
         {
             // Query for a list of Builds > a given date
             UriBuilder uriBuilder = new UriBuilder();
@@ -167,8 +167,8 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services
         }
 
         public async Task<JObject> GetBuilds(string baseAddress, string organizationName, string projectName,
-            string personalAccessToken, List<long>? definitionIds = default(List<long>), string? minTime = null,
-            string? maxTime = null, int top = 0, string? continuationToken = null, string apiVersion = "")
+            string personalAccessToken, List<long> definitionIds = default(List<long>), string minTime = null,
+            string maxTime = null, int top = 0, string continuationToken = null, string apiVersion = "")
         {
             // Query for a list of Builds > a given date
             UriBuilder uriBuilder = new UriBuilder();
@@ -339,7 +339,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services
         }
 
         public async Task<JObject> GetWorkItemLinks(string baseAddress, string organizationName,
-            string projectName, string personalAccessToken, string? startDateTime = null, string? continuationToken = null, string apiVersion = "")
+            string projectName, string personalAccessToken, string startDateTime = null, string continuationToken = null, string apiVersion = "")
         {
             // Query for a list of WorkItemLinks > a given date
             UriBuilder uriBuilder = new UriBuilder();
@@ -375,7 +375,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services
             return responseObject;
         }
 
-        public async Task<JObject> GetProjects(string baseAddress, string organizationName, string personalAccessToken, string? continuationToken = null, string apiVersion = "")
+        public async Task<JObject> GetProjects(string baseAddress, string organizationName, string personalAccessToken, string continuationToken = null, string apiVersion = "")
         {
             UriBuilder uriBuilder = new UriBuilder();
             uriBuilder.Scheme = "https";
@@ -443,7 +443,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services
         }
 
         public async Task<JObject> GetTestSuites(string baseAddress, string organizationName, string projectName, string personalAccessToken,
-            long planId, string? continuationToken = null, string apiVersion = "")
+            long planId, string continuationToken = null, string apiVersion = "")
         {
             UriBuilder uriBuilder = new UriBuilder();
             uriBuilder.Scheme = "https";
@@ -484,7 +484,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services
         }
 
         public async Task<JObject> GetTestPoints(string baseAddress, string organizationName, string projectName, string personalAccessToken,
-            long planId, long suiteId, string? continuationToken = null, string apiVersion = "")
+            long planId, long suiteId, string continuationToken = null, string apiVersion = "")
         {
             UriBuilder uriBuilder = new UriBuilder();
             uriBuilder.Scheme = "https";

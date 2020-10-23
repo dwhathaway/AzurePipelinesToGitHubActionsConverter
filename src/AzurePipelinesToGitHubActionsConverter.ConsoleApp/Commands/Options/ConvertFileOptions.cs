@@ -9,6 +9,6 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Commands.Options
         public string FilePath { get; set; }
 
         [Option('o', "outputFolder", Required = false, HelpText = "The folder path where the .github/workflows folder should be created")]
-        public string? OutputFolder { get; set; }
+        public string OutputFolder { get; set; }
     }
 }
