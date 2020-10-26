@@ -25,7 +25,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             { "Build.ArtifactStagingDirectory", "github.workspace" }, // workspace is shared work folder, may need to create subfolder(s)
             { "Build.SourceBranch", "github.ref" },
             { "Build.SourceBranchName", "github.ref" }, // not exact mapping "main" vs "refs/heads/main"
-            { "Build.RepositoryName", "github.repository" }, // not exact mapping "gitutil" vs "naterickard/gitutil"
+            { "Build.RepositoryName", "github.repository" }, // not exact mapping [repo name] vs [account/org name]/[repo name]
             { "rev:r", "github.run_number" }
         };
 
