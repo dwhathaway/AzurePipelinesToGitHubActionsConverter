@@ -12,8 +12,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 {
     public class VariablesProcessing
     {
+        const string GroupKey = "group";
         private readonly bool _verbose;
+        private readonly List<VariableGroup> _variableGroups;
         public List<string> VariableList;
+        private List<string> secrets = new List<string>();
 
         private Dictionary<string, string> SystemVarMapping = new Dictionary<string, string>()
         {
@@ -29,8 +32,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             { "rev:r", "github.run_number" }
         };
 
-        public VariablesProcessing(bool verbose)
+        public VariablesProcessing(List<VariableGroup> variableGroups = null, bool verbose = true)
         {
+            _variableGroups = variableGroups;
             _verbose = verbose;
             VariableList = new List<string>();
         }
@@ -67,9 +71,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     //groups
                     if (variables[i].group != null)
                     {
-                        if (!processedVariables.ContainsKey("group"))
+                        if (!processedVariables.ContainsKey(GroupKey))
                         {
-                            processedVariables.Add("group", variables[i].group);
+                            processedVariables.Add(GroupKey, variables[i].group);
                         }
                         else
                         {
@@ -90,7 +94,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         public Dictionary<string, string> ProcessComplexVariablesV2(List<AzurePipelines.Variable> variables)
         {
-            Dictionary<string, string> processedVariables = new Dictionary<string, string>();
+            var processedVariables = new Dictionary<string, string>();
 
             if (variables != null)
             {
@@ -107,9 +111,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     //groups
                     if (variables[i].group != null)
                     {
-                        if (processedVariables.ContainsKey("group") == false)
+                        if (processedVariables.ContainsKey(GroupKey) == false)
                         {
-                            processedVariables.Add("group", variables[i].group);
+                            processedVariables.Add(GroupKey, variables[i].group);
                         }
                         else
                         {
@@ -130,7 +134,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         public Dictionary<string, string> ProcessComplexParametersV2(List<AzurePipelines.Parameter> parameter)
         {
-            Dictionary<string, string> processedVariables = new Dictionary<string, string>();
+            var processedVariables = new Dictionary<string, string>();
 
             if (parameter != null)
             {
@@ -206,9 +210,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            Dictionary<string, string> env = new Dictionary<string, string>();
-            Dictionary<string, string> processedParameters = ProcessComplexParametersV2(parameters);
-            Dictionary<string, string> processedVariables = ProcessComplexVariablesV2(variables);
+            var env = new Dictionary<string, string>();
+            var processedParameters = ProcessComplexParametersV2(parameters);
+            var processedVariables = ProcessComplexVariablesV2(variables);
 
             foreach (KeyValuePair<string, string> item in processedParameters)
             {
@@ -226,14 +230,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            if (env.Count > 0)
-            {
-                return env;
-            }
-            else
-            {
-                return null;
-            }
+            return env.Count > 0 ? env : null;
         }
 
         public List<string> SearchForVariables(string input)
@@ -308,8 +305,36 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     }
                 }
 
-                // add all vars, sans the 'group' reserved key
-                var envVars = envVarTable.Keys.Where(v => v != "group").Distinct().ToList();
+                // separate groups from vars
+                var groupNames = envVarTable.Where(v => v.Key == GroupKey).Select(g => g.Value).Distinct().ToList();
+                envVarTable.Remove(GroupKey);
+
+                // for any group reference found, see if we've retrieved the group details/vars and convert accordingly
+                foreach (var group in groupNames)
+                {
+                    var varGroup = _variableGroups.SingleOrDefault(g => g.name == group);
+
+                    foreach (var groupVar in varGroup.variables)
+                    {
+                        // is the var marked as secret? KeyVault-backed var groups will always come thru like this
+                        if (!groupVar.Value.isSecret) // not secret
+                        {
+                            // for non-secret values, we'll convert them over directly to env vars
+                            envVarTable.Add(groupVar.Key, groupVar.Value.value);
+                        }
+                        else // secret
+                        {
+                            // track the secret definition as we'll later look to replace usages
+                            secrets.Add(groupVar.Key);
+
+                            // for secret values, we'll convert them to env vars using the secrets syntax
+                            envVarTable.Add(groupVar.Key, $"${{{{ secrets.{groupVar.Key} }}}}");
+                        }
+                    }
+                }
+
+                // add all non-group vars
+                var envVars = envVarTable.Keys.Distinct().ToList();
 
                 // add all vars found to our list - these will be the env vars used in other parts of the workflow
                 VariableList.AddRange(envVars);
@@ -418,22 +443,31 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         {
             // Replace variables with the format "${{ [prefix.]MyVar }}"
             var matches = FindPipelineVariables(yaml);
+            var usedSecrets = new List<string>();
+            var uniqueVars = VariableList.Distinct().ToList();
 
             foreach (Match match in matches)
             {
-                /// actual var name will be returned in grouping 1
-                var varName = match.Groups[1].Value;
+                // actual var name will be returned in grouping 1
+                var varName = match.Groups[1].Value.Trim();
 
                 // Only do replacement if this is one of the vars we've identified... stops false positives like job.status
-                if (VariableList.Contains(varName))
+                var definedVar = uniqueVars.SingleOrDefault(v => v.ToUpper() == varName.ToUpper());
+
+                if (definedVar != null)
                 {
                     if (varName != matrixVariableName)
                     {
-                        yaml = yaml.Replace(match.Value, $"${{{{ env.{varName} }}}}");
+                        yaml = yaml.Replace(match.Value, $"${{{{ env.{definedVar} }}}}");
                     }
                     else // matrix var
                     {
-                        yaml = yaml.Replace(match.Value, $"${{{{ matrix.{varName} }}}}");
+                        yaml = yaml.Replace(match.Value, $"${{{{ matrix.{definedVar} }}}}");
+                    }
+
+                    if (secrets.Contains(definedVar))
+                    {
+                        usedSecrets.Add(definedVar);
                     }
                 }
                 else // see if this matches a system var we know how to replace
@@ -444,11 +478,27 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         yaml = yaml.Replace(match.Value, $"${{{{ {systemVar.Value} }}}}");
                     }
-                    else // not a var we've defined or a known system var, but we'll convert the syntax
+                    else // keep track of any that we don't replace, so we can handle further below
                     {
-                        yaml = yaml.Replace(match.Value, $"${{{{ env.{varName} }}}}");
+                        var varParts = varName.Split('.');
+
+                        // is this var usage already prefixed?
+                        if (varParts.Length < 2)
+                        {
+                            // Not prefixed, convert the syntax
+                            yaml = yaml.Replace(match.Value, $"${{{{ env.{varName} }}}}");
+                        }
                     }
                 }
+            }
+
+            // do we have unused secrets that were pulled in?
+            foreach (var secret in secrets.Except(usedSecrets))
+            {
+                // If so, let's clean them from the env definition. This will remove any unused group vars that were pulled in
+                string pattern = @"(?:\s|^)*" + Regex.Escape($"{secret}: ${{{{ secrets.{secret} }}}}") + @"(?:\s|$)";
+
+                yaml = Regex.Replace(yaml, pattern, "\r\n", RegexOptions.IgnoreCase);
             }
 
             yaml = yaml.ReplaceAnyCase("${{ env.rev:r }}", "${ GITHUB_RUN_NUMBER }"); // need to verify, moved over from older code; prefer prettier [github.] context usage

@@ -13,15 +13,18 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         public List<string> VariableList;
         public string MatrixVariableName;
         private readonly bool _verbose;
-        public JobProcessing(bool verbose)
+        private readonly List<VariableGroup> _variableGroups;
+
+        public JobProcessing(List<VariableGroup> variableGroups, bool verbose)
         {
+            _variableGroups = variableGroups;
             _verbose = verbose;
         }
 
         public GitHubActions.Job ProcessJob(AzurePipelines.Job job, AzurePipelines.Resources resources)
         {
             var generalProcessing = new GeneralProcessing(_verbose);
-            var vp = new VariablesProcessing(_verbose);
+            var vp = new VariablesProcessing(_variableGroups, _verbose);
             var sp = new StepsProcessing();
 
             GitHubActions.Job newJob = new GitHubActions.Job
@@ -81,7 +84,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 
                 foreach (AzurePipelines.Job job in jobs)
                 {
-                    JobProcessing jobProcessing = new JobProcessing(_verbose);
+                    JobProcessing jobProcessing = new JobProcessing(_variableGroups, _verbose);
                     string jobName = job.job;
 
                     if (jobName == null && job.deployment != null)
@@ -108,7 +111,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         public AzurePipelines.Job[] ExtractAzurePipelinesJobsV2(JToken jobsJson, string strategyYaml)
         {
             var gp = new GeneralProcessing(_verbose);
-            var vp = new VariablesProcessing(_verbose);
+            var vp = new VariablesProcessing(_variableGroups, _verbose);
             var jobs = new AzurePipelines.Job[jobsJson.Count()];
 
             if (jobsJson != null)

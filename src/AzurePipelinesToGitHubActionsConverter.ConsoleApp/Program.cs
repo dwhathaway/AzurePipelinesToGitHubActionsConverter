@@ -14,6 +14,7 @@ using CommandLine;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
+using AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines;
 
 namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
 {
@@ -149,14 +150,16 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
             do
             {
                 // Extract each of the pipelines from the ADO project
-                var task = adoService.GetBuildDefinitions(baseUrl, opts.Account, opts.Project,
+                var buildsTask = adoService.GetBuildDefinitions(baseUrl, opts.Account, opts.Project,
                     opts.PersonalAccessToken, opts.PipelineIds.ToList(), opts.YamlFilename, 0, continuationToken);
 
-                Task.WaitAll(task);
+                var varTask = adoService.GetVariableGroups(baseUrl, opts.Account, opts.Project, opts.PersonalAccessToken, apiVersion: "6.0-preview.2");
 
-                var response = task.Result;
+                Task.WaitAll(buildsTask, varTask);
 
+                var response = buildsTask.Result;
                 var pipelines = response["value"] as JArray;
+                var variableGroups = JsonConvert.DeserializeObject<List<VariableGroup>>(varTask.Result["value"].ToString());
 
                 var yamlPipelines = pipelines.Where((p) => ((JObject)p["process"]).ContainsKey("yamlFilename")).ToList();
 
@@ -183,12 +186,12 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                     var pipelineId = yamlPipeline["id"].Value<long>();
                     var repositoryName = yamlPipeline["repository"]["properties"]["shortName"].Value<string>();
 
-                    var task1 = adoService.GetPipelineYaml(baseUrl, opts.Account, opts.Project,
+                    var pipelineTask = adoService.GetPipelineYaml(baseUrl, opts.Account, opts.Project,
                         opts.PersonalAccessToken, pipelineId, "6.1-preview.1");
 
-                    Task.WaitAll(task1);
+                    Task.WaitAll(pipelineTask);
 
-                    var pipelineYaml = CleanPrNode(task1.Result);
+                    var pipelineYaml = CleanPrNode(pipelineTask.Result);
 
                     if (!string.IsNullOrWhiteSpace(pipelineYaml))
                     {
@@ -212,7 +215,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                         try
                         {
                             // Run the converter
-                            Conversion conversion = new Conversion(addWorkflowTrigger: opts.AddWorkflowTrigger);
+                            Conversion conversion = new Conversion(variableGroups, opts.AddWorkflowTrigger);
 
                             var result = conversion.ConvertAzurePipelineToGitHubAction(pipelineYaml);
 

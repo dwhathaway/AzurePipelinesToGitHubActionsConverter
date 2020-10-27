@@ -13,11 +13,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         private string _matrixVariableName;
         private readonly bool _verbose;
         private readonly bool _addWorkflowTrigger;
+        private List<VariableGroup> _variableGroups;
 
-        public Conversion(bool verbose = true, bool? addWorkflowTrigger = null)
+        public Conversion(List<VariableGroup> variableGroups = null, bool? addWorkflowTrigger = null, bool verbose = true)
         {
-            _verbose = verbose;
+            _variableGroups = variableGroups;
             _addWorkflowTrigger = addWorkflowTrigger ?? false;
+            _verbose = verbose;
         }
 
         /// <summary>
@@ -74,7 +76,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 if (azurePipelineWithSimpleTriggerAndSimpleVariables != null)
                 {
                     success = true;
-                    var pp = new PipelineProcessing<string[], Dictionary<string, string>>(_verbose);
+                    var pp = new PipelineProcessing<string[], Dictionary<string, string>>(_variableGroups, _verbose);
                     gitHubActions = pp.ProcessPipeline(azurePipelineWithSimpleTriggerAndSimpleVariables, azurePipelineWithSimpleTriggerAndSimpleVariables.trigger, null, azurePipelineWithSimpleTriggerAndSimpleVariables.variables, null);
 
                     if (pp.MatrixVariableName != null)
@@ -93,7 +95,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 if (azurePipelineWithSimpleTriggerAndComplexVariables != null)
                 {
                     success = true;
-                    var pp = new PipelineProcessing<string[], AzurePipelines.Variable[]>(_verbose);
+                    var pp = new PipelineProcessing<string[], AzurePipelines.Variable[]>(_variableGroups, _verbose);
                     gitHubActions = pp.ProcessPipeline(azurePipelineWithSimpleTriggerAndComplexVariables, azurePipelineWithSimpleTriggerAndComplexVariables.trigger, null, null, azurePipelineWithSimpleTriggerAndComplexVariables.variables);
 
                     if (pp.MatrixVariableName != null)
@@ -112,7 +114,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 if (azurePipelineWithComplexTriggerAndSimpleVariables != null)
                 {
                     success = true;
-                    var pp = new PipelineProcessing<AzurePipelines.Trigger, Dictionary<string, string>>(_verbose);
+                    var pp = new PipelineProcessing<AzurePipelines.Trigger, Dictionary<string, string>>(_variableGroups, _verbose);
                     gitHubActions = pp.ProcessPipeline(azurePipelineWithComplexTriggerAndSimpleVariables, null, azurePipelineWithComplexTriggerAndSimpleVariables.trigger, azurePipelineWithComplexTriggerAndSimpleVariables.variables, null);
 
                     if (pp.MatrixVariableName != null)
@@ -131,7 +133,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 if (azurePipelineWithComplexTriggerAndComplexVariables != null)
                 {
                     success = true;
-                    var pp = new PipelineProcessing<AzurePipelines.Trigger, AzurePipelines.Variable[]>(_verbose);
+                    var pp = new PipelineProcessing<AzurePipelines.Trigger, AzurePipelines.Variable[]>(_variableGroups, _verbose);
                     gitHubActions = pp.ProcessPipeline(azurePipelineWithComplexTriggerAndComplexVariables, null, azurePipelineWithComplexTriggerAndComplexVariables.trigger, null, azurePipelineWithComplexTriggerAndComplexVariables.variables);
 
                     if (pp.MatrixVariableName != null)
@@ -149,7 +151,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
 
             //Search for any other variables. Duplicates are ok, they are processed the same
-            VariablesProcessing vp = new VariablesProcessing(_verbose);
+            var vp = new VariablesProcessing(_variableGroups, _verbose);
             variables.AddRange(vp.SearchForVariables(processedInput));
 
             //Create the GitHub YAML and apply some adjustments
@@ -240,8 +242,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
 
             //Build up the GitHub object piece by piece
-            GitHubActionsRoot gitHubActions = new GitHubActionsRoot();
-            GeneralProcessing gp = new GeneralProcessing(_verbose);
+            var gitHubActions = new GitHubActionsRoot();
+            var gp = new GeneralProcessing(_verbose);
 
             if (json != null)
             {
@@ -253,7 +255,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
 
                 //Trigger/PR/Schedules
-                TriggerProcessing tp = new TriggerProcessing(_verbose);
+                var tp = new TriggerProcessing(_verbose);
 
                 if (json["trigger"] != null)
                 {
@@ -300,9 +302,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
 
                 //Parameters & Variables
-                string parametersYaml = json["parameters"]?.ToString();
-                string variablesYaml = json["variables"]?.ToString();
-                VariablesProcessing vp = new VariablesProcessing(_verbose);
+                var parametersYaml = json["parameters"]?.ToString();
+                var variablesYaml = json["variables"]?.ToString();
+                var vp = new VariablesProcessing(_variableGroups, _verbose);
                 gitHubActions.env = vp.ProcessParametersAndVariablesV2(parametersYaml, variablesYaml);
 
                 //Resources
@@ -332,14 +334,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 //If we have stages, convert them into jobs first:
                 if (json["stages"] != null)
                 {
-                    StagesProcessing sp = new StagesProcessing(_verbose);
+                    var sp = new StagesProcessing(_variableGroups, _verbose);
                     gitHubActions.jobs = sp.ProcessStagesV2(json["stages"], strategyYaml);
                 }
 
                 //If we don't have stages, but have jobs:
                 else if (json["stages"] == null && json["jobs"] != null)
                 {
-                    JobProcessing jp = new JobProcessing(_verbose);
+                    var jp = new JobProcessing(_variableGroups, _verbose);
                     gitHubActions.jobs = jp.ProcessJobsV2(jp.ExtractAzurePipelinesJobsV2(json["jobs"], strategyYaml), gp.ExtractResourcesV2(resourcesYaml));
                     _matrixVariableName = jp.MatrixVariableName;
                 }
@@ -357,7 +359,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                     //Steps
                     string stepsYaml = json["steps"]?.ToString();
-                    JobProcessing jp = new JobProcessing(_verbose);
+                    var jp = new JobProcessing(_variableGroups, _verbose);
                     AzurePipelines.Job[] pipelineJobs = jp.ProcessJobFromPipelineRootV2(poolYaml, strategyYaml, stepsYaml);
                     Resources resources = gp.ExtractResourcesV2(resourcesYaml);
                     gitHubActions.jobs = jp.ProcessJobsV2(pipelineJobs, resources);
@@ -448,9 +450,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             if (azurePipelinesJob != null && azurePipelinesJob.steps != null && azurePipelinesJob.steps.Length > 0)
             {
-                var vp = new VariablesProcessing(_verbose);
+                var vp = new VariablesProcessing(_variableGroups, _verbose);
                 //As we needed to create an entire (but minimal) pipelines job, we need to now extract the step for processing
-                StepsProcessing stepsProcessing = new StepsProcessing();
+                var stepsProcessing = new StepsProcessing();
                 gitHubActionStep = stepsProcessing.ProcessStep(azurePipelinesJob.steps[0], vp);
 
                 //Find all variables in this text block, we need this for a bit later
@@ -460,7 +462,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 if (gitHubActionStep != null)
                 {
                     //add the step into a github job so it renders correctly
-                    GitHubActions.Job gitHubJob = new GitHubActions.Job
+                    var gitHubJob = new GitHubActions.Job
                     {
                         steps = new GitHubActions.Step[1] //create an array of size 1
                     };
@@ -474,7 +476,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
 
             //Load failed tasks and comments for processing
-            List<string> allComments = new List<string>();
+            var allComments = new List<string>();
 
             if (gitHubActionStep != null)
             {
