@@ -19,21 +19,24 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Commands.Options
         public IEnumerable<long> PipelineIds { get; set; }
 
         [Option('y', "yamlFilename", Required = false, HelpText = "The name of a specific Pipeline Yaml file to process")]
-        public string? YamlFilename { get; set; }
+        public string YamlFilename { get; set; }
 
         [Option('b', "baseUrl", Required = false, HelpText = "The base url of your Azure DevOps instance (normally dev.azure.com)")]
-        public string? BaseUrl { get; set; }
+        public string BaseUrl { get; set; }
 
         [Option('r', "repositoryName", Required = false, HelpText = "Only process pipelines for a given repository name")]
-        public string? RepositoryName { get; set; }
+        public string RepositoryName { get; set; }
 
         [Option('o', "outputFolder", Required = false, HelpText = "The folder path where the .github/workflows folder should be created")]
-        public string? OutputFolder { get; set; }
+        public string OutputFolder { get; set; }
 
         [Option('x', "pipelineFolderName", Required = false, HelpText = "The folder that the Azure Pipeline is stored in (all others will be ignored)")]
-        public string? PipelineFolderName { get; set; }
+        public string PipelineFolderName { get; set; }
 
         [Option('d', "includeIdInFilename", Required = false, Default = false, HelpText = "Whether or not to include the ID of the pipeline in the output file name - useful for processing large projects where multiple repos may reuse the same file name")]
         public bool? IncludeIdInFilename { get; set; }
+
+        [Option('f', "addWorkflowTrigger", Required = false, Default = false, HelpText = "Whether or not to add a workflow_dispatch trigger to the resulting GitHub Actions workflow")]
+        public bool? AddWorkflowTrigger { get; set; }
     }
 }

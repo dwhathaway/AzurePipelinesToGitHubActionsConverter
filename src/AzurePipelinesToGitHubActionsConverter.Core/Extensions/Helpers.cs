@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Text.RegularExpressions;
+
 namespace AzurePipelinesToGitHubActionsConverter.Core.Extensions
 {
     public static class Helpers
@@ -6,6 +8,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Extensions
         public static string[] Split(this string input, string sep)
         {
             return input.Split(new[] { sep }, StringSplitOptions.None);
+        }
+
+        public static string ReplaceAnyCase(this string value, string pattern, string replacement)
+        {
+            return Regex.Replace(value, Regex.Escape(pattern), replacement.Replace("$", "$$"), RegexOptions.IgnoreCase);
         }
     }
 }

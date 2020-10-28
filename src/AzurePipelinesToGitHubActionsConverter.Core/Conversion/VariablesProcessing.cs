@@ -14,6 +14,21 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
     {
         private readonly bool _verbose;
         public List<string> VariableList;
+
+        private Dictionary<string, string> SystemVarMapping = new Dictionary<string, string>()
+        {
+            { "Agent.WorkFolder", "runner.workspace" },
+            { "Build.BuildId", "github.run_id" },
+            { "Build.BuildNumber", "github.run_number" },
+            { "Build.DefinitionName", "github.workflow" },
+            { "Build.SourcesDirectory", "github.workspace" }, // workspace is shared work folder, may need to create subfolder(s)
+            { "Build.ArtifactStagingDirectory", "github.workspace" }, // workspace is shared work folder, may need to create subfolder(s)
+            { "Build.SourceBranch", "github.ref" },
+            { "Build.SourceBranchName", "github.ref" }, // not exact mapping "main" vs "refs/heads/main"
+            { "Build.RepositoryName", "github.repository" }, // not exact mapping [repo name] vs [account/org name]/[repo name]
+            { "rev:r", "github.run_number" }
+        };
+
         public VariablesProcessing(bool verbose)
         {
             _verbose = verbose;
@@ -25,11 +40,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         {
             if (variables != null)
             {
-                //update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
-                foreach (string item in variables.Keys)
-                {
-                    VariableList.Add(item);
-                }
+                // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
+                VariableList.AddRange(variables.Keys);
             }
 
             return variables;
@@ -39,9 +51,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         public Dictionary<string, string> ProcessComplexVariables(AzurePipelines.Variable[] variables)
         {
             Dictionary<string, string> processedVariables = new Dictionary<string, string>();
+
             if (variables != null)
             {
-                //update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
+                // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
                 for (int i = 0; i < variables.Length; i++)
                 {
                     //name/value pairs
@@ -50,6 +63,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         processedVariables.Add(variables[i].name, variables[i].value);
                         VariableList.Add(variables[i].name);
                     }
+
                     //groups
                     if (variables[i].group != null)
                     {
@@ -62,23 +76,25 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             ConversionUtility.WriteLine("group: only 1 variable group is supported at present", _verbose);
                         }
                     }
+
                     //template
                     if (variables[i].template != null)
                     {
                         processedVariables.Add("template", variables[i].template);
                     }
                 }
-
             }
+
             return processedVariables;
         }
 
         public Dictionary<string, string> ProcessComplexVariablesV2(List<AzurePipelines.Variable> variables)
         {
             Dictionary<string, string> processedVariables = new Dictionary<string, string>();
+
             if (variables != null)
             {
-                //update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
+                // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
                 for (int i = 0; i < variables.Count; i++)
                 {
                     //name/value pairs
@@ -87,6 +103,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         processedVariables.Add(variables[i].name, variables[i].value);
                         VariableList.Add(variables[i].name);
                     }
+
                     //groups
                     if (variables[i].group != null)
                     {
@@ -99,6 +116,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             ConversionUtility.WriteLine("group: only 1 variable group is supported at present", _verbose);
                         }
                     }
+
                     //template
                     if (variables[i].template != null)
                     {
@@ -106,15 +124,17 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     }
                 }
             }
+
             return processedVariables;
         }
 
         public Dictionary<string, string> ProcessComplexParametersV2(List<AzurePipelines.Parameter> parameter)
         {
             Dictionary<string, string> processedVariables = new Dictionary<string, string>();
+
             if (parameter != null)
             {
-                //update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
+                // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
                 for (int i = 0; i < parameter.Count; i++)
                 {
                     //name/value pairs
@@ -124,24 +144,27 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         {
                             parameter[i].@default = "";
                         }
+
                         processedVariables.Add(parameter[i].name, parameter[i].@default);
                         VariableList.Add(parameter[i].name);
                     }
                 }
             }
+
             return processedVariables;
         }
-
 
         public Dictionary<string, string> ProcessParametersAndVariablesV2(string parametersYaml, string variablesYaml)
         {
             List<Parameter> parameters = null;
+
             if (parametersYaml != null)
             {
                 try
                 {
                     Dictionary<string, string> simpleParameters = GenericObjectSerialization.DeserializeYaml<Dictionary<string, string>>(parametersYaml);
                     parameters = new List<Parameter>();
+
                     foreach (KeyValuePair<string, string> item in simpleParameters)
                     {
                         parameters.Add(new Parameter
@@ -159,12 +182,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
 
             List<Variable> variables = null;
+
             if (variablesYaml != null)
             {
                 try
                 {
                     Dictionary<string, string> simpleVariables = GenericObjectSerialization.DeserializeYaml<Dictionary<string, string>>(variablesYaml);
                     variables = new List<Variable>();
+
                     foreach (KeyValuePair<string, string> item in simpleVariables)
                     {
                         variables.Add(new Variable
@@ -184,6 +209,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             Dictionary<string, string> env = new Dictionary<string, string>();
             Dictionary<string, string> processedParameters = ProcessComplexParametersV2(parameters);
             Dictionary<string, string> processedVariables = ProcessComplexVariablesV2(variables);
+
             foreach (KeyValuePair<string, string> item in processedParameters)
             {
                 if (env.ContainsKey(item.Key) == false)
@@ -191,6 +217,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     env.Add(item.Key, item.Value);
                 }
             }
+
             foreach (KeyValuePair<string, string> item in processedVariables)
             {
                 if (env.ContainsKey(item.Key) == false)
@@ -216,10 +243,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             if (input != null)
             {
                 string[] stepLines = input.Split(System.Environment.NewLine);
+
                 foreach (string line in stepLines)
                 {
                     List<string> variableResults = FindPipelineVariablesInString(line);
                     variableResults.AddRange(FindPipelineParametersInString(line));
+
                     if (variableResults.Count > 0)
                     {
                         variableList.AddRange(variableResults);
@@ -231,30 +260,85 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         }
 
         //Search GitHub object for all environment variables
-        public List<string> SearchForVariablesV2(GitHubActionsRoot gitHubActions)
+        public void ProcessEnvVars(GitHubActionsRoot gitHubActions)
         {
-            List<string> variables = new List<string>();
+            List<KeyValuePair<string, string>> rawEnvValues = null;
+
+            // We want to 1) Identify env vars at the workflow, stage/job level(s)
+            //  2) Pre-process these var values to see if they refer to other env vars, as the syntax rules are nuanced
             if (gitHubActions.env != null)
             {
-                foreach (KeyValuePair<string, string> env in gitHubActions.env)
-                {
-                    variables.Add(env.Key);
-                }
+                // grab the initial values here before processing, so we can compare job vs wf level env
+                rawEnvValues = gitHubActions.env.ToList();
+
+                processVarDict(gitHubActions.env);
             }
+
             if (gitHubActions.jobs != null)
             {
-                foreach (KeyValuePair<string, GitHubActions.Job> job in gitHubActions.jobs)
+                foreach (var job in gitHubActions.jobs)
                 {
-                    if (job.Value.env != null)
+                    processVarDict(job.Value.env, rawEnvValues);
+
+                    // no vars left? Remove the table
+                    if (job.Value.env.Count == 0)
                     {
-                        foreach (KeyValuePair<string, string> env in job.Value.env)
-                        {
-                            variables.Add(env.Key);
-                        }
+                        job.Value.env = null;
                     }
                 }
             }
-            return variables;
+        }
+
+        private void processVarDict(Dictionary<string, string> envVarTable, List<KeyValuePair<string, string>> parentVarTable = null)
+        {
+            if (envVarTable != null)
+            {
+                // do we want to filter out env vars that are identical to vars in the parent context? This can easily occur due to templated pipeline conversions
+                if (parentVarTable != null)
+                {
+                    // so, for any 'child' level env vars that also exist at the 'parent' level and contain the same value, let's remove them
+                    var sameVars = envVarTable.Where(v => parentVarTable.Any(pv => pv.Key == v.Key)).ToList();
+
+                    foreach (var sameVar in sameVars)
+                    {
+                        if (sameVar.Value == parentVarTable.FirstOrDefault(pv => pv.Key ==  sameVar.Key).Value)
+                        {
+                            envVarTable.Remove(sameVar.Key);
+                        }
+                    }
+                }
+
+                // add all vars, sans the 'group' reserved key
+                var envVars = envVarTable.Keys.Where(v => v != "group").Distinct().ToList();
+
+                // add all vars found to our list - these will be the env vars used in other parts of the workflow
+                VariableList.AddRange(envVars);
+
+                // Now, process the values of these env vars - nuanced rules in place for how we refer to var in objects 'above' vs siblings
+                foreach (var key in envVars)
+                {
+                    var varValue = envVarTable[key];
+                    var varsUsed = FindPipelineVariables(varValue);
+
+                    if (varsUsed.Count > 0)
+                    {
+                        foreach (Match varMatched in varsUsed)
+                        {
+                            var varName = varMatched.Groups[1].Value;
+
+                            // is this var defined at the job level?
+                            if (envVars.Contains(varName))
+                            {
+                                // strip any prefix & wrapper, just refer to the var via $var - replace the full match with $var
+                                varValue = varValue.Replace(varMatched.Value, $"${varName}");
+                            }
+                        }
+
+                        // put the modified value back in the env dict
+                        envVarTable[key] = varValue;
+                    }
+                }
+            }
         }
 
         private List<string> FindPipelineVariablesInString(string text)
@@ -313,6 +397,90 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
 
             return list;
+        }
+
+        public MatchCollection FindPipelineVariables(string input)
+        {
+            // match anything in ${}, ${{}}, $(), $[], but NOT $var
+            return FindPipelineVariables(input, @"[^\r\n()\{\}\[\]$]+");
+        }
+
+        public MatchCollection FindPipelineVariables(string input, string varNamePattern)
+        {
+            // match "varNamePattern" in ${}, ${{}}, $(), $[], but NOT $var
+            //  Allowed ADO var chars here: https://docs.microsoft.com/en-us/azure/devops/pipelines/process/variables?view=azure-devops&tabs=yaml%2Cbatch#variable-characters
+            var varPattern = @"\$(?:\{|\{|\(|\[|\{\{)(" + varNamePattern + @")(?:\}\}|\}|\]|\})?(?:\}\}|\]|\)|\}|\})";
+
+            return Regex.Matches(input, varPattern, RegexOptions.IgnoreCase);
+        }
+
+        public string ProcessVariableConversions(string yaml, string matrixVariableName = null)
+        {
+            // Replace variables with the format "${{ [prefix.]MyVar }}"
+            var matches = FindPipelineVariables(yaml);
+
+            foreach (Match match in matches)
+            {
+                /// actual var name will be returned in grouping 1
+                var varName = match.Groups[1].Value;
+
+                // Only do replacement if this is one of the vars we've identified... stops false positives like job.status
+                if (VariableList.Contains(varName))
+                {
+                    if (varName != matrixVariableName)
+                    {
+                        yaml = yaml.Replace(match.Value, $"${{{{ env.{varName} }}}}");
+                    }
+                    else // matrix var
+                    {
+                        yaml = yaml.Replace(match.Value, $"${{{{ matrix.{varName} }}}}");
+                    }
+                }
+                else // see if this matches a system var we know how to replace
+                {
+                    var systemVar = SystemVarMapping.FirstOrDefault(v => v.Key.ToLower() == varName.ToLower());
+
+                    if (systemVar.Value != null)
+                    {
+                        yaml = yaml.Replace(match.Value, $"${{{{ {systemVar.Value} }}}}");
+                    }
+                    else // not a var we've defined or a known system var, but we'll convert the syntax
+                    {
+                        yaml = yaml.Replace(match.Value, $"${{{{ env.{varName} }}}}");
+                    }
+                }
+            }
+
+            yaml = yaml.ReplaceAnyCase("${{ env.rev:r }}", "${ GITHUB_RUN_NUMBER }"); // need to verify, moved over from older code; prefer prettier [github.] context usage
+            yaml = yaml.ReplaceAnyCase("env.parameters.", "env.");
+            
+            return yaml;
+        }
+
+        public string ProcessIndexedVariables(string input)
+        {
+            // Find indexed var usage, i.e. variables['MyVar']
+            var varFormat = "variables[";
+            var varStart = input.IndexOf(varFormat);
+
+            while (varStart >= 0)
+            {
+                var varEnd = input.IndexOf(']', varStart);
+
+                if (varEnd >= 0)
+                {
+                    var nameStart = varStart + varFormat.Length + 1;
+                    var nameEnd = varEnd - nameStart - 1;
+                    var varName = input.Substring(nameStart, nameEnd);
+
+                    input = input.Remove(varStart, varEnd - varStart + 1);
+                    input = input.Insert(varStart, $"env['{varName}']");
+                }
+
+                varStart = input.IndexOf(varFormat, varStart + 1);
+            }
+
+            return input;
         }
     }
 }

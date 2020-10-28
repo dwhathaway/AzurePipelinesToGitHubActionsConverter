@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
 {
@@ -14,35 +15,32 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             return DeserializeGitHubActionsYaml(yaml);
         }
 
-        public static string Serialize(GitHubActionsRoot gitHubActions, List<string> variableList = null, string matrixVariableName = null)
+        public static string Serialize(GitHubActionsRoot gitHubActions, VariablesProcessing variablesProcessing, string matrixVariableName = null)
         {
             string yaml = GenericObjectSerialization.SerializeYaml<GitHubActionsRoot>(gitHubActions);
 
-            yaml = ProcessGitHubActionYAML(yaml, variableList, matrixVariableName);
+            yaml = ProcessGitHubActionYAML(yaml, variablesProcessing, matrixVariableName);
 
             return yaml;
         }
 
-        public static string SerializeJob(GitHubActions.Job gitHubActionJob, List<string> variableList = null)
+        public static string SerializeJob(GitHubActions.Job gitHubActionJob, VariablesProcessing variablesProcessing)
         {
             string yaml = GenericObjectSerialization.SerializeYaml<GitHubActions.Job>(gitHubActionJob);
 
-            yaml = ProcessGitHubActionYAML(yaml, variableList);
+            yaml = ProcessGitHubActionYAML(yaml, variablesProcessing);
             yaml = StepsPostProcessing(yaml);
 
             return yaml;
         }
 
-        private static string ProcessGitHubActionYAML(string yaml, List<string> variableList = null, string matrixVariableName = null)
+        private static string ProcessGitHubActionYAML(string yaml, VariablesProcessing variablesProcessing, string matrixVariableName = null)
         {
             //Fix some variables for serialization, the '-' character is not valid in C# property names, and some of the YAML standard uses reserved words (e.g. if)
             yaml = PrepareYamlPropertiesForGitHubSerialization(yaml);
 
-            //update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
-            if (variableList != null)
-            {
-                yaml = PrepareYamlVariablesForGitHubSerialization(yaml, variableList, matrixVariableName);
-            }
+            // update variables from the $(variableName) format to ${{variableName}} format
+            yaml = variablesProcessing.ProcessVariableConversions(yaml, matrixVariableName);
 
             //If there is a cron in the conversion, we need to do a special processing to remove the quotes. 
             //This is hella custom and ugly, but otherwise the yaml comes out funky
@@ -50,29 +48,39 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             if (yaml.IndexOf("cron") >= 0)
             {
                 StringBuilder processedYaml = new StringBuilder();
+
                 using (StringReader reader = new StringReader(yaml))
                 {
                     string line;
+
                     while ((line = reader.ReadLine()) != null)
                     {
                         if (line.IndexOf("cron") >= 0)
                         {
                             line = line.Replace(@"""", "");
                         }
+
                         processedYaml.AppendLine(line);
                     }
                 }
+
                 yaml = processedYaml.ToString();
             }
-            //The serialization adds extra new line characters to Multi-line scripts
+
+            // The serialization adds extra new line characters to Multi-line scripts
             yaml = yaml.Replace("\r\n\r\n", "\r\n");
             yaml = yaml.Replace("\n\n", "\n");
 
-            //If we have a string with new lines and strings, it double encodes them, so we undo this
-            yaml = yaml.Replace("\\r", "\r");
+            // Goal: If we have a string with new lines and strings, it double encodes them, so we undo this by changing \\r to \r
+            // This Regex will match escaped carriage returns ONLY if they are exactly "\\r" and not \\\\r
+            var onlyCRs = @"(?<!\\)\\r";
+            yaml = Regex.Replace(yaml, onlyCRs, "\r");
+            // Now, fix ACTUAL backslash + r combos that came in via scripts... these may be paths, e.g. "${{ env.Build.SourcesDirectory }}\\tools\\\\run_windows_source_indexer.ps1" that we purposely over-encode to stop improper \r matches
+            yaml = yaml.Replace("\\\\r", "\\r");
+
             yaml = yaml.Replace("\\n", "\n");
 
-            //Trim off any leading of trailing new lines 
+            // Trim off any leading of trailing new lines 
             yaml = yaml.TrimStart('\r', '\n');
             yaml = yaml.TrimEnd('\r', '\n');
             yaml = yaml.Trim();
@@ -82,7 +90,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
 
         private static GitHubActionsRoot DeserializeGitHubActionsYaml(string yaml)
         {
-            //Fix some variables that we can't use for property names because the "-" character is not allowed in c# properties, or it's a reserved word (e.g. if)
+            // Fix some variables that we can't use for property names because the "-" character is not allowed in c# properties, or it's a reserved word (e.g. if)
             yaml = yaml.Replace("runs-on", "runs_on");
             yaml = yaml.Replace("if", "_if");
             yaml = yaml.Replace("timeout-minutes", "timeout_minutes");
@@ -93,28 +101,22 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             yaml = yaml.Replace("max-parallel", "max_parallel");
             yaml = yaml.Replace("ref", "_ref");
             yaml = yaml.Replace("continue-on-error", "continue_on_error");
-            yaml = yaml.Replace("timeout-minutes", "timeout_minutes");
 
             return GenericObjectSerialization.DeserializeYaml<GitHubActionsRoot>(yaml);
         }
 
         private static string PrepareYamlPropertiesForGitHubSerialization(string yaml)
         {
-            //Fix system variables
-            yaml = yaml.Replace("$(build.artifactstagingdirectory)", "${GITHUB_WORKSPACE}");
-
             //Fix some variables that we can't use for property names because the "-" character is not allowed in c# properties, or it's a reserved word (e.g. if)
             yaml = yaml.Replace("runs_on", "runs-on");
             yaml = yaml.Replace("_if", "if");
             yaml = yaml.Replace("timeout_minutes", "timeout-minutes");
-            yaml = yaml.Replace("pull_request", "pull-request");
             yaml = yaml.Replace("branches_ignore", "branches-ignore");
             yaml = yaml.Replace("paths_ignore", "paths-ignore");
             yaml = yaml.Replace("tags_ignore", "tags-ignore");
             yaml = yaml.Replace("max_parallel", "max-parallel");
             yaml = yaml.Replace("_ref", "ref");
             yaml = yaml.Replace("continue_on_error", "continue-on-error");
-            yaml = yaml.Replace("timeout_minutes", "timeout-minutes");
             yaml = yaml.Replace("step_message:", "#");
             yaml = yaml.Replace("job_message:", "#");
             yaml = yaml.Replace("step_message", "#");
@@ -137,40 +139,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             return yaml;
         }
 
-        private static string PrepareYamlVariablesForGitHubSerialization(string yaml, List<string> variableList, string matrixVariableName = null)
-        {
-            if (matrixVariableName != null)
-            {
-                variableList.Add(matrixVariableName);
-            }
-
-            foreach (string item in variableList)
-            {
-                if (item == matrixVariableName)
-                {
-                    yaml = yaml.Replace("$(" + item + ")", "${{ matrix." + item + " }}");
-                    yaml = yaml.Replace("$( " + item + " )", "${{ matrix." + item + " }}");
-                }
-                else
-                {
-                    //Replace variables with the format "$(MyVar)" with the format "$MyVar"
-                    yaml = yaml.Replace("$(" + item + ")", "${{ env." + item + " }}");
-                    yaml = yaml.Replace("$( " + item + " )", "${{ env." + item + " }}");
-                    yaml = yaml.Replace("$(" + item + " )", "${{ env." + item + " }}");
-                    yaml = yaml.Replace("$( " + item + ")", "${{ env." + item + " }}");
-                    yaml = yaml.Replace("$" + item + "", "${{ env." + item + " }}");
-                    yaml = yaml.Replace("${{" + item + "}}", "${{ env." + item + " }}");
-                    yaml = yaml.Replace("${{ " + item + " }}", "${{ env." + item + " }}");
-                    yaml = yaml.Replace("${{" + item + " }}", "${{ env." + item + " }}");
-                    yaml = yaml.Replace("${{ " + item + "}}", "${{ env." + item + " }}");
-                    yaml = yaml.Replace("env.parameters.", "env.");
-                    yaml = yaml.Replace("${{ env.rev:r }}", "${GITHUB_RUN_NUMBER}"); //Replace the unique version number in Azure DevOps with a unique system variable in GitHub Actions
-                }
-            }
-
-            return yaml;
-        }
-
         //Strip the steps off to focus on just the individual step
         private static string StepsPostProcessing(string input)
         {
@@ -178,14 +146,17 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             {
                 //we need to remove steps, before we do, we need to see if the task needs to remove indent
                 string[] stepLines = input.Split(Environment.NewLine);
+
                 if (stepLines.Length > 0)
                 {
                     int i = 0;
+
                     //Search for the first non empty line
                     while (string.IsNullOrEmpty(stepLines[i].Trim()) == true || stepLines[i].Trim().StartsWith("steps:") == true)
                     {
                         i++;
                     }
+
                     if (stepLines[i].StartsWith("-") == true)
                     {
                         int indentLevel = stepLines[i].IndexOf("-");
@@ -195,6 +166,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
                         //}
                         string buffer = ConversionUtility.GenerateSpaces(indentLevel);
                         StringBuilder newInput = new StringBuilder();
+
                         foreach (string line in stepLines)
                         {
                             if (line.Trim().StartsWith("steps:") == false)
@@ -204,14 +176,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
                                 newInput.Append(Environment.NewLine);
                             }
                         }
+
                         input = newInput.ToString();
                     }
                 }
+
                 input = input.TrimEnd('\r', '\n');
             }
 
             return input;
         }
-
     }
 }
