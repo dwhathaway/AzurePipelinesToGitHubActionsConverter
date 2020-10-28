@@ -268,14 +268,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 // grab the initial values here before processing, so we can compare job vs wf level env
                 rawEnvValues = gitHubActions.env.ToList();
 
-                processVarDict(gitHubActions.env);
+                processVarDict(gitHubActions, gitHubActions.env);
             }
 
             if (gitHubActions.jobs != null)
             {
                 foreach (var job in gitHubActions.jobs)
                 {
-                    processVarDict(job.Value.env, rawEnvValues);
+                    processVarDict(gitHubActions, job.Value.env, rawEnvValues);
 
                     // no vars left? Remove the table
                     if (job.Value.env.Count == 0)
@@ -286,7 +286,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
         }
 
-        private void processVarDict(Dictionary<string, string> envVarTable, List<KeyValuePair<string, string>> parentVarTable = null)
+        private void processVarDict(GitHubActionsRoot actionsRoot, Dictionary<string, string> envVarTable, List<KeyValuePair<string, string>> parentVarTable = null)
         {
             if (envVarTable != null)
             {
@@ -307,6 +307,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                 // separate groups from vars
                 var groupNames = envVarTable.Where(v => v.Key == GroupKey).Select(g => g.Value).Distinct().ToList();
+                // don't output the group name in our env section
                 envVarTable.Remove(GroupKey);
 
                 // for any group reference found, see if we've retrieved the group details/vars and convert accordingly
@@ -331,6 +332,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             envVarTable.Add(groupVar.Key, $"${{{{ secrets.{groupVar.Key} }}}}");
                         }
                     }
+
+                    actionsRoot.messages.Add($"Note: The consumed values from a variable group ({group}) has been imported from Azure DevOps. Please review varable usage and any secret values used in this workflow, which have been migrated to GitHub secrets syntax");
                 }
 
                 // add all non-group vars
