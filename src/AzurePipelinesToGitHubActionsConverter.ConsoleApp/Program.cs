@@ -181,10 +181,16 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                 foreach (var yamlPipeline in yamlPipelines)
                 {
                     var pipelineId = yamlPipeline["id"].Value<long>();
-                    var repositoryName = yamlPipeline["repository"]["properties"]["shortName"].Value<string>();
+                    string repositoryName = string.Empty;
+                    
+                    // If code is in Azure Repos, there will be no shortName property, should we just use fullname always?
+                    if(yamlPipeline["repository"]["properties"]["shortName"] != null)
+                        repositoryName = yamlPipeline["repository"]["properties"]["shortName"].Value<string>();
+                    else
+                        repositoryName = yamlPipeline["repository"]["properties"]["fullName"].Value<string>();
 
                     var task1 = adoService.GetPipelineYaml(baseUrl, opts.Account, opts.Project,
-                        opts.PersonalAccessToken, pipelineId, "6.1-preview.1");
+                        opts.PersonalAccessToken, pipelineId, "6.0-preview.1");
 
                     Task.WaitAll(task1);
 
