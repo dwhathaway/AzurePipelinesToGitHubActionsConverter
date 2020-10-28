@@ -190,7 +190,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                         repositoryName = yamlPipeline["repository"]["properties"]["fullName"].Value<string>();
 
                     var task1 = adoService.GetPipelineYaml(baseUrl, opts.Account, opts.Project,
-                        opts.PersonalAccessToken, pipelineId, "6.0-preview.1");
+                        opts.PersonalAccessToken, pipelineId, "6.1-preview.1");
 
                     Task.WaitAll(task1);
 
