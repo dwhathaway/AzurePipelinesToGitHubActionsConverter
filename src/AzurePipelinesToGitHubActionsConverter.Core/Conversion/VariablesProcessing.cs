@@ -339,7 +339,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 // add all non-group vars
                 var envVars = envVarTable.Keys.Distinct().ToList();
 
-                // add all vars found to our list - these will be the env vars used in other parts of the workflow
+                // add all non-group vars found to our list - these will be the env vars used in other parts of the workflow
                 VariableList.AddRange(envVars);
 
                 // Now, process the values of these env vars - nuanced rules in place for how we refer to var in objects 'above' vs siblings
@@ -468,6 +468,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         yaml = yaml.Replace(match.Value, $"${{{{ matrix.{definedVar} }}}}");
                     }
 
+                    // keep track of any that we use, so we can handle those we don't further below
                     if (secrets.Contains(definedVar))
                     {
                         usedSecrets.Add(definedVar);
@@ -481,7 +482,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         yaml = yaml.Replace(match.Value, $"${{{{ {systemVar.Value} }}}}");
                     }
-                    else // keep track of any that we don't replace, so we can handle further below
+                    else // otherwise, only convert the usage syntax to env if it doesn't look like a system var or in antoher context already
                     {
                         var varParts = varName.Split('.');
 
@@ -501,7 +502,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 // If so, let's clean them from the env definition. This will remove any unused group vars that were pulled in
                 string pattern = @"(?:\s|^)*" + Regex.Escape($"{secret}: ${{{{ secrets.{secret} }}}}") + @"(?:\s|$)";
 
-                yaml = Regex.Replace(yaml, pattern, "\r\n", RegexOptions.IgnoreCase);
+                yaml = Regex.Replace(yaml, pattern, System.Environment.NewLine, RegexOptions.IgnoreCase);
             }
 
             yaml = yaml.ReplaceAnyCase("${{ env.rev:r }}", "${ GITHUB_RUN_NUMBER }"); // need to verify, moved over from older code; prefer prettier [github.] context usage
