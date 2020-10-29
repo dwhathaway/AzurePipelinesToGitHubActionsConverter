@@ -32,6 +32,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         public string[] ProcessDependsOnV2(string dependsOnYaml)
         {
             string[] dependsOn = null;
+
             if (dependsOnYaml != null)
             {
                 try
@@ -47,13 +48,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            //Build the return results
+            // Build the return results
             return dependsOn;
         }
 
         public AzurePipelines.Environment ProcessEnvironmentV2(string environmentYaml)
         {
             AzurePipelines.Environment environment = null;
+
             if (environmentYaml != null)
             {
                 try
@@ -68,6 +70,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         //when the environment is just a simple string, e.g.  //environment: environmentName.resourceName
                         string simpleEnvironment = GenericObjectSerialization.DeserializeYaml<string>(environmentYaml);
+
                         environment = new AzurePipelines.Environment
                         {
                             name = simpleEnvironment
@@ -76,28 +79,37 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     catch (Exception ex2)
                     {
                         JObject json = JSONSerialization.DeserializeStringToObject(environmentYaml);
+
                         if (json["tags"].Type.ToString() == "String")
                         {
                             string name = null;
+
                             if (json["name"] != null)
                             {
                                 name = json["name"].ToString();
                             }
+
                             string resourceName = null;
+
                             if (json["resourceName"] != null)
                             {
                                 name = json["resourceName"].ToString();
                             }
+
                             string resourceId = null;
+
                             if (json["resourceId"] != null)
                             {
                                 name = json["resourceId"].ToString();
                             }
+
                             string resourceType = null;
+
                             if (json["resourceType"] != null)
                             {
                                 name = json["resourceType"].ToString();
                             }
+
                             environment = new AzurePipelines.Environment
                             {
                                 name = name,
@@ -105,6 +117,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                                 resourceId = resourceId,
                                 resourceType = resourceType
                             };
+
                             //Move the single string demands to an array
                             environment.tags = new string[1];
                             environment.tags[0] = json["tags"].ToString();
@@ -126,14 +139,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 try
                 {
-                    Resources resources = GenericObjectSerialization.DeserializeYaml<Resources>(resourcesYaml);
-                    return resources;
+                    return GenericObjectSerialization.DeserializeYaml<Resources>(resourcesYaml);
                 }
                 catch (Exception ex)
                 {
                     ConversionUtility.WriteLine($"DeserializeYaml<Resources>(resourcesYaml) swallowed an exception: " + ex.Message, _verbose);
                 }
             }
+
             return null;
         }
 
@@ -143,7 +156,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 try
                 {
-                    //Most often, the pool will be in this structure
+                    // Most often, the pool will be in this structure
                     AzurePipelines.Strategy strategy = GenericObjectSerialization.DeserializeYaml<AzurePipelines.Strategy>(strategyYaml);
                     return strategy;
                 }
@@ -152,14 +165,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     ConversionUtility.WriteLine($"DeserializeYaml<AzurePipelines.Strategy>(strategyYaml) swallowed an exception: " + ex.Message, _verbose);
                 }
             }
+
             return null;
         }
-   
 
-        //process the build pool/agent
+        // process the build pool/agent
         public string ProcessPool(Pool pool)
         {
             string newPool = null;
+
             if (pool != null)
             {
                 if (pool.vmImage != null)
@@ -171,12 +185,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     newPool = pool.name;
                 }
             }
+
             return newPool;
         }
 
         public Pool ProcessPoolV2(string poolYaml)
         {
             Pool pool = null;
+
             if (poolYaml != null)
             {
                 try
@@ -187,6 +203,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 catch (Exception ex)
                 {
                     ConversionUtility.WriteLine($"DeserializeYaml<Pool>(poolYaml) swallowed an exception: " + ex.Message, _verbose);
+
                     //If it's a simple pool string, and has no json in it, assign it to the name
                     if (poolYaml.IndexOf("{") < 0)
                     {
@@ -199,28 +216,36 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         //otherwise, demands is probably a string, instead of string[], let's fix it
                         JObject json = JSONSerialization.DeserializeStringToObject(poolYaml);
+
                         if (json["demands"].Type.ToString() == "String")
                         {
                             string name = null;
+
                             if (json["name"] != null)
                             {
                                 name = json["name"].ToString();
                             }
+
                             string vmImage = null;
+
                             if (json["vmImage"] != null)
                             {
                                 vmImage = json["vmImage"].ToString();
                             }
+
                             string demands = null;
+
                             if (json["demands"] != null)
                             {
                                 demands = json["demands"].ToString();
                             }
+
                             pool = new Pool
                             {
                                 name = name,
                                 vmImage = vmImage
                             };
+
                             //Move the single string demands to an array
                             pool.demands = new string[1];
                             pool.demands[0] = demands;
@@ -232,10 +257,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     }
                 }
             }
+
             return pool;
         }
 
-        //process the strategy matrix
+        // process the strategy matrix
         public GitHubActions.Strategy ProcessStrategy(AzurePipelines.Strategy strategy)
         {
             //Azure DevOps
@@ -268,37 +294,45 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         processedStrategy = new GitHubActions.Strategy();
                     }
+
                     string[] matrix = new string[strategy.matrix.Count];
                     KeyValuePair<string, Dictionary<string, string>> matrixVariable = strategy.matrix.First();
                     MatrixVariableName = matrixVariable.Value.Keys.First();
                     int i = 0;
+
                     foreach (KeyValuePair<string, Dictionary<string, string>> entry in strategy.matrix)
                     {
                         matrix[i] = strategy.matrix[entry.Key][MatrixVariableName];
                         i++;
                     }
+
                     processedStrategy.matrix = new Dictionary<string, string[]>
                     {
                         { MatrixVariableName, matrix }
                     };
                 }
+
                 if (strategy.parallel != null)
                 {
                     ConversionUtility.WriteLine("This variable is not needed in actions: " + strategy.parallel, _verbose);
                 }
+
                 if (strategy.maxParallel != null)
                 {
                     if (processedStrategy == null)
                     {
                         processedStrategy = new GitHubActions.Strategy();
                     }
+
                     processedStrategy.max_parallel = strategy.maxParallel;
                 }
+
                 if (strategy.runOnce != null)
                 {
-                    //TODO: There is currently no conversion path for other strategies
+                    // TODO: There is currently no conversion path for other strategies
                     ConversionUtility.WriteLine("TODO: " + strategy.runOnce, _verbose);
                 }
+
                 return processedStrategy;
             }
             else
@@ -335,29 +369,33 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             if (resources != null && resources.containers != null && resources.containers.Length > 0)
             {
-                GitHubActions.Container container = new GitHubActions.Container
+                var container = new GitHubActions.Container
                 {
-                    //All containers have at least the image name
+                    // All containers have at least the image name
                     image = resources.containers[0].image
                 };
 
-                //Optionally, these next 4 properties could also exist
+                // Optionally, these next 4 properties could also exist
                 if (resources.containers[0].env != null)
                 {
                     container.env = resources.containers[0].env;
                 }
+
                 if (resources.containers[0].ports != null)
                 {
                     container.ports = resources.containers[0].ports;
                 }
+
                 if (resources.containers[0].volumes != null)
                 {
                     container.volumes = resources.containers[0].volumes;
                 }
+
                 if (resources.containers[0].options != null)
                 {
                     container.options = resources.containers[0].options;
                 }
+
                 return container;
             }
             else
@@ -365,7 +403,5 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 return null;
             }
         }
-    
-
     }
 }

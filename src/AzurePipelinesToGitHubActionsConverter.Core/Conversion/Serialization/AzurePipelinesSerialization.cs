@@ -1,6 +1,6 @@
 ﻿using AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines;
 using System;
-using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -10,34 +10,37 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
     public class AzurePipelinesSerialization<TTriggers, TVariables>
     {
         /// <summary>
-        /// Deserialize an Azure DevOps Pipeline with a simple trigger/ string[] and simple variable list/ Dictionary<string, string>
+        /// Deserialize an Azure DevOps Pipeline with a simple trigger/ string[] and simple variable list/ OrderedDictionary
         /// </summary>
         /// <param name="yaml">yaml to convert</param>
         /// <returns>Azure DevOps Pipeline with simple trigger and simple variables</returns>
-        public static AzurePipelinesRoot<string[], Dictionary<string, string>> DeserializeSimpleTriggerAndSimpleVariables(string yaml)
+        public static AzurePipelinesRoot<string[], OrderedDictionary> DeserializeSimpleTriggerAndSimpleVariables(string yaml)
         {
-            AzurePipelinesRoot<string[], Dictionary<string, string>> azurePipeline = null;
+            AzurePipelinesRoot<string[], OrderedDictionary> azurePipeline = null;
+
             try
             {
                 yaml = CleanYamlBeforeDeserialization(yaml);
-                azurePipeline = GenericObjectSerialization.DeserializeYaml<AzurePipelinesRoot<string[], Dictionary<string, string>>>(yaml);
+                azurePipeline = GenericObjectSerialization.DeserializeYaml<AzurePipelinesRoot<string[], OrderedDictionary>>(yaml);
             }
             catch (Exception ex)
             {
                 ConversionUtility.WriteLine($"{nameof(DeserializeSimpleTriggerAndSimpleVariables)} swallowed an exception: " + ex.Message, true);
                 //Do nothing
             }
+
             return azurePipeline;
         }
 
         /// <summary>
-        /// Deserialize an Azure DevOps Pipeline with a simple trigger/ string[] and simple variable list/ Dictionary<string, string>
+        /// Deserialize an Azure DevOps Pipeline with a simple trigger/ string[] and simple variable list/ Variable[]
         /// </summary>
         /// <param name="yaml">yaml to convert</param>
         /// <returns>Azure DevOps Pipeline with simple trigger and complex variables</returns>
         public static AzurePipelinesRoot<string[], AzurePipelines.Variable[]> DeserializeSimpleTriggerAndComplexVariables(string yaml)
         {
             AzurePipelinesRoot<string[], AzurePipelines.Variable[]> azurePipeline = null;
+
             try
             {
                 yaml = CleanYamlBeforeDeserialization(yaml);
@@ -46,8 +49,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             catch (Exception ex)
             {
                 ConversionUtility.WriteLine($"{nameof(DeserializeSimpleTriggerAndComplexVariables)} swallowed an exception: " + ex.Message, true);
-                //Do nothing
+                // Do nothing
             }
+
             return azurePipeline;
         }
 
@@ -56,19 +60,21 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
         /// </summary>
         /// <param name="yaml">yaml to convert</param>
         /// <returns>Azure DevOps Pipeline with complex trigger and simple variables</returns>
-        public static AzurePipelinesRoot<AzurePipelines.Trigger, Dictionary<string, string>> DeserializeComplexTriggerAndSimpleVariables(string yaml)
+        public static AzurePipelinesRoot<AzurePipelines.Trigger, OrderedDictionary> DeserializeComplexTriggerAndSimpleVariables(string yaml)
         {
-            AzurePipelinesRoot<AzurePipelines.Trigger, Dictionary<string, string>> azurePipeline = null;
+            AzurePipelinesRoot<AzurePipelines.Trigger, OrderedDictionary> azurePipeline = null;
+
             try
             {
                 yaml = CleanYamlBeforeDeserialization(yaml);
-                azurePipeline = GenericObjectSerialization.DeserializeYaml<AzurePipelinesRoot<AzurePipelines.Trigger, Dictionary<string, string>>>(yaml);
+                azurePipeline = GenericObjectSerialization.DeserializeYaml<AzurePipelinesRoot<AzurePipelines.Trigger, OrderedDictionary>>(yaml);
             }
             catch (Exception ex)
             {
                 ConversionUtility.WriteLine($"{nameof(DeserializeComplexTriggerAndSimpleVariables)} swallowed an exception: " + ex.Message, true);
-                //Do nothing
+                // Do nothing
             }
+
             return azurePipeline;
         }
 
@@ -89,51 +95,54 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             //}
             //catch (Exception ex)
             //{
-            //    //Do nothing
+            //    // Do nothing
             //}
             return azurePipeline;
         }
 
         private static string CleanYamlBeforeDeserialization(string yaml)
         {
-            //Handle a null input
+            // Handle a null input
             if (yaml == null)
             {
                 yaml = "";
             }
 
-            //Not well documented, but repo:self is redundent, and hence we remove it if detected (https://stackoverflow.com/questions/53860194/azure-devops-resources-repo-self)
+            // Not well documented, but repo:self is redundent, and hence we remove it if detected (https://stackoverflow.com/questions/53860194/azure-devops-resources-repo-self)
             yaml = yaml.Replace("- repo: self", "");
 
-            //Fix some variables that we can't use for property names because the "-" character is not allowed in c# properties, or it's a reserved word (e.g. if)
+            // Fix some variables that we can't use for property names because the "-" character is not allowed in c# properties, or it's a reserved word (e.g. if)
             yaml = yaml.Replace("ref:", "_ref:");
 
-            //Handle condition variable insertion syntax. This is a bit ugly. 
+            // Handle condition variable insertion syntax. This is a bit ugly. 
             if (yaml.IndexOf("variables") >= 0)
             {
                 StringBuilder processedYaml = new StringBuilder();
+
                 using (StringReader reader = new StringReader(yaml))
                 {
                     int variablesIndentLevel = 0;
                     bool scanningForVariables = false;
                     string line;
+
                     while ((line = reader.ReadLine()) != null)
                     {
-                        //Find the lines with variables
+                        // Find the lines with variables
                         if (line.IndexOf("variables:") >= 0)
                         {
-                            //Start tracking variables and record the variables indent level
+                            // Start tracking variables and record the variables indent level
                             scanningForVariables = true;
                             variablesIndentLevel = ConversionUtility.CountSpacesBeforeText(line);
                         }
                         else if (scanningForVariables == true)
                         {
-                            //While scanning for variables, get the indent level. It should be (variablesIndentLevel + 2), if it's more than that, we have a variable insert.
+                            // While scanning for variables, get the indent level. It should be (variablesIndentLevel + 2), if it's more than that, we have a variable insert.
                             ConversionUtility.WriteLine("Scanning for vars: " + line, true);
                             int lineIndentLevel = ConversionUtility.CountSpacesBeforeText(line);
+
                             if ((variablesIndentLevel - (lineIndentLevel - 2)) == 0)
                             {
-                                //If the line starts with a conditional insertation, then comment it out
+                                // If the line starts with a conditional insertation, then comment it out
                                 if (line.Trim().StartsWith("${{") == true)
                                 {
                                     line = "#" + line;
@@ -141,7 +150,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
                             }
                             else if (variablesIndentLevel - (lineIndentLevel - 2) <= 0)
                             {
-                                //we found a variable insert and need to remove the first two spaces from the front of the variable
+                                // we found a variable insert and need to remove the first two spaces from the front of the variable
                                 line = line.Substring(2, line.Length - 2);
                             }
                             else if (variablesIndentLevel - (lineIndentLevel - 2) >= 0) //we are done with variables, and back at the next root node
@@ -149,9 +158,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
                                 scanningForVariables = false;
                             }
                         }
+
                         processedYaml.AppendLine(line);
                     }
                 }
+
                 yaml = processedYaml.ToString();
             }
 

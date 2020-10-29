@@ -3,7 +3,9 @@ using AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization;
 using AzurePipelinesToGitHubActionsConverter.Core.Extensions;
 using AzurePipelinesToGitHubActionsConverter.Core.GitHubActions;
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -40,21 +42,26 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         }
 
         //process all (simple) variables
-        public Dictionary<string, string> ProcessSimpleVariables(Dictionary<string, string> variables)
+        public OrderedDictionary ProcessSimpleVariables(OrderedDictionary variables)
         {
             if (variables != null)
             {
                 // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
-                VariableList.AddRange(variables.Keys);
+                // VariableList.AddRange(variables.Keys);
+
+                foreach (string key in variables.Keys)
+                {
+                    VariableList.Add(key);
+                }
             }
 
             return variables;
         }
 
         //process all (complex) variables
-        public Dictionary<string, string> ProcessComplexVariables(AzurePipelines.Variable[] variables)
+        public OrderedDictionary ProcessComplexVariables(AzurePipelines.Variable[] variables)
         {
-            Dictionary<string, string> processedVariables = new Dictionary<string, string>();
+            var processedVariables = new OrderedDictionary();
 
             if (variables != null)
             {
@@ -71,7 +78,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     //groups
                     if (variables[i].group != null)
                     {
-                        if (!processedVariables.ContainsKey(GroupKey))
+                        if (!processedVariables.Contains(GroupKey))
                         {
                             processedVariables.Add(GroupKey, variables[i].group);
                         }
@@ -158,7 +165,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return processedVariables;
         }
 
-        public Dictionary<string, string> ProcessParametersAndVariablesV2(string parametersYaml, string variablesYaml)
+        public OrderedDictionary ProcessParametersAndVariablesV2(string parametersYaml, string variablesYaml)
         {
             List<Parameter> parameters = null;
 
@@ -166,17 +173,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 try
                 {
-                    Dictionary<string, string> simpleParameters = GenericObjectSerialization.DeserializeYaml<Dictionary<string, string>>(parametersYaml);
+                    OrderedDictionary simpleParameters = GenericObjectSerialization.DeserializeYaml<OrderedDictionary>(parametersYaml);
                     parameters = new List<Parameter>();
 
-                    foreach (KeyValuePair<string, string> item in simpleParameters)
-                    {
-                        parameters.Add(new Parameter
+                    parameters.AddRange(
+                        simpleParameters.Cast<DictionaryEntry>().Select(de => new Parameter
                         {
-                            name = item.Key,
-                            @default = item.Value
-                        });
-                    }
+                            name = de.StringKey(),
+                            @default = de.StringValue()
+                        }));
                 }
                 catch (Exception ex)
                 {
@@ -191,17 +196,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 try
                 {
-                    Dictionary<string, string> simpleVariables = GenericObjectSerialization.DeserializeYaml<Dictionary<string, string>>(variablesYaml);
+                    OrderedDictionary simpleVariables = GenericObjectSerialization.DeserializeYaml<OrderedDictionary>(variablesYaml);
                     variables = new List<Variable>();
 
-                    foreach (KeyValuePair<string, string> item in simpleVariables)
-                    {
-                        variables.Add(new Variable
+                    variables.AddRange(
+                        simpleVariables.Cast<DictionaryEntry>().Select(de => new Variable
                         {
-                            name = item.Key,
-                            value = item.Value
-                        });
-                    }
+                            name = de.StringKey(),
+                            value = de.StringValue()
+                        }));
                 }
                 catch (Exception ex)
                 {
@@ -210,13 +213,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            var env = new Dictionary<string, string>();
+            var env = new OrderedDictionary();
             var processedParameters = ProcessComplexParametersV2(parameters);
             var processedVariables = ProcessComplexVariablesV2(variables);
 
             foreach (KeyValuePair<string, string> item in processedParameters)
             {
-                if (env.ContainsKey(item.Key) == false)
+                if (!env.Contains(item.Key))
                 {
                     env.Add(item.Key, item.Value);
                 }
@@ -224,7 +227,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             foreach (KeyValuePair<string, string> item in processedVariables)
             {
-                if (env.ContainsKey(item.Key) == false)
+                if (!env.Contains(item.Key))
                 {
                     env.Add(item.Key, item.Value);
                 }
@@ -259,14 +262,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         //Search GitHub object for all environment variables
         public void ProcessEnvVars(GitHubActionsRoot gitHubActions)
         {
-            List<KeyValuePair<string, string>> rawEnvValues = null;
+            DictionaryEntry[] rawEnvValues = null;
 
             // We want to 1) Identify env vars at the workflow, stage/job level(s)
             //  2) Pre-process these var values to see if they refer to other env vars, as the syntax rules are nuanced
             if (gitHubActions.env != null)
             {
                 // grab the initial values here before processing, so we can compare job vs wf level env
-                rawEnvValues = gitHubActions.env.ToList();
+                rawEnvValues = new DictionaryEntry[gitHubActions.env.Count];
+                gitHubActions.env.CopyTo(rawEnvValues, 0);
 
                 processVarDict(gitHubActions, gitHubActions.env);
             }
@@ -286,34 +290,38 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
         }
 
-        private void processVarDict(GitHubActionsRoot actionsRoot, Dictionary<string, string> envVarTable, List<KeyValuePair<string, string>> parentVarTable = null)
+        private void processVarDict(GitHubActionsRoot actionsRoot, OrderedDictionary envVarTable, DictionaryEntry[] parentVarTable = null)
         {
             if (envVarTable != null)
             {
+                var envVarDict = envVarTable.Cast<DictionaryEntry>().ToList();
+
                 // do we want to filter out env vars that are identical to vars in the parent context? This can easily occur due to templated pipeline conversions
                 if (parentVarTable != null)
                 {
                     // so, for any 'child' level env vars that also exist at the 'parent' level and contain the same value, let's remove them
-                    var sameVars = envVarTable.Where(v => parentVarTable.Any(pv => pv.Key == v.Key)).ToList();
+                    var sameVars = envVarDict.Where(de => parentVarTable.Any(pv => pv.StringKey() == de.StringKey())).ToList();
 
                     foreach (var sameVar in sameVars)
                     {
-                        if (sameVar.Value == parentVarTable.FirstOrDefault(pv => pv.Key ==  sameVar.Key).Value)
+                        if (sameVar.StringValue() == parentVarTable.FirstOrDefault(pv => pv.StringKey() == sameVar.StringKey()).StringValue())
                         {
                             envVarTable.Remove(sameVar.Key);
                         }
                     }
                 }
 
-                // separate groups from vars
-                var groupNames = envVarTable.Where(v => v.Key == GroupKey).Select(g => g.Value).Distinct().ToList();
-                // don't output the group name in our env section
-                envVarTable.Remove(GroupKey);
+                // don't want to output the group name in our env section, so find and remove it
+                int groupIndex = envVarDict.FindIndex(v => v.StringKey() == GroupKey);
 
-                // for any group reference found, see if we've retrieved the group details/vars and convert accordingly
-                foreach (var group in groupNames)
+                if (groupIndex >= 0)
                 {
-                    var varGroup = _variableGroups.SingleOrDefault(g => g.name == group);
+                    // separate group from vars
+                    var groupName = envVarDict[groupIndex].StringValue();
+                    envVarTable.RemoveAt(groupIndex);
+
+                    // if any group reference found, see if we've retrieved the group details/vars and convert accordingly
+                    var varGroup = _variableGroups.SingleOrDefault(g => g.name == groupName);
 
                     foreach (var groupVar in varGroup.variables)
                     {
@@ -321,7 +329,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         if (!groupVar.Value.isSecret) // not secret
                         {
                             // for non-secret values, we'll convert them over directly to env vars
-                            envVarTable.Add(groupVar.Key, groupVar.Value.value);
+                            envVarTable.Insert(groupIndex, groupVar.Key, groupVar.Value.value);
                         }
                         else // secret
                         {
@@ -329,15 +337,17 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             secrets.Add(groupVar.Key);
 
                             // for secret values, we'll convert them to env vars using the secrets syntax
-                            envVarTable.Add(groupVar.Key, $"${{{{ secrets.{groupVar.Key} }}}}");
+                            envVarTable.Insert(groupIndex, groupVar.Key, $"${{{{ secrets.{groupVar.Key} }}}}");
                         }
+
+                        groupIndex++;
                     }
 
-                    actionsRoot.messages.Add($"Note: The consumed values from a variable group ({group}) has been imported from Azure DevOps. Please review varable usage and any secret values used in this workflow, which have been migrated to GitHub secrets syntax");
+                    actionsRoot.messages.Add($"Note: The consumed values from a variable group ({groupName}) has been imported from Azure DevOps. Please review varable usage and any secret values used in this workflow, which have been migrated to GitHub secrets syntax");
                 }
 
-                // add all non-group vars
-                var envVars = envVarTable.Keys.Distinct().ToList();
+                var envVars = new string[envVarTable.Count];
+                envVarTable.Keys.CopyTo(envVars, 0);
 
                 // add all non-group vars found to our list - these will be the env vars used in other parts of the workflow
                 VariableList.AddRange(envVars);
@@ -345,7 +355,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 // Now, process the values of these env vars - nuanced rules in place for how we refer to var in objects 'above' vs siblings
                 foreach (var key in envVars)
                 {
-                    var varValue = envVarTable[key];
+                    var varValue = envVarTable[key].ToString();
                     var varsUsed = FindPipelineVariables(varValue);
 
                     if (varsUsed.Count > 0)

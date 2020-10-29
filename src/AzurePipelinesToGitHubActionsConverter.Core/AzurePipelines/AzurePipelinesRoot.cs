@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections.Specialized;
 
 //#Example Pipeline YAML:
 //trigger:
@@ -29,9 +29,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
     {
         public string name { get; set; }
 
-        public Dictionary<string, string> parameters { get; set; }
+        public OrderedDictionary parameters { get; set; }
 
         public string container { get; set; }
+        
         public Resources resources { get; set; }
 
         //Trigger is a complicated case, where it can be a simple list, or a more complex trigger object
@@ -43,7 +44,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
         //public Trigger trigger { get; set; }
 
         public Trigger pr { get; set; }
+
         public Schedule[] schedules { get; set; }
+
         public Pool pool { get; set; }
 
         public Strategy strategy { get; set; }
@@ -53,9 +56,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
         //public Dictionary<string, string> variables { get; set; }
 
         public Stage[] stages { get; set; }
+
         public Job[] jobs { get; set; }
+
         public Step[] steps { get; set; }
+
         //TODO: There is currently no conversion path for services
-        public Dictionary<string, string> services { get; set; }        
+        public OrderedDictionary services { get; set; }        
     }
 }
