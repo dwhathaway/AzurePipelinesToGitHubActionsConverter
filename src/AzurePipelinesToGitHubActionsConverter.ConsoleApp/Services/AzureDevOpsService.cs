@@ -166,6 +166,53 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services
             return finalYaml;
         }
 
+        public async Task<JObject> GetVariableGroups(string baseAddress, string organizationName, string projectName, string personalAccessToken, string groupName = null, int top = 0, string continuationToken = null, string apiVersion = "")
+        {
+            UriBuilder uriBuilder = new UriBuilder();
+            uriBuilder.Scheme = "https";
+            uriBuilder.Host = baseAddress;
+            uriBuilder.Path = $"{organizationName}/{projectName}/_apis/distributedtask/variablegroups";
+            // https://dev.azure.com/dev-mc/Minecraft/_apis/distributedtask/variablegroups?api-version=6.1-preview.1
+
+            // Check to see if the caller has provided an API Version, if not, use the global default version
+            apiVersion = string.IsNullOrWhiteSpace(apiVersion) ? _apiVersion : apiVersion;
+
+            List<string> queryParams = new List<string>()
+            {
+                $"api-version={apiVersion}"
+            };
+
+            if (!string.IsNullOrWhiteSpace(groupName))
+                queryParams.Add($"$groupName={groupName}");
+
+            // If value is specified, limit the number of items to return
+            if (top > 0)
+                queryParams.Add($"$top={top}");
+
+            // Append a continuationToken if provided
+            if (!string.IsNullOrWhiteSpace(continuationToken))
+                queryParams.Add($"continuationToken={continuationToken}");
+
+            uriBuilder.Query = string.Join("&", queryParams);
+
+            var result = await SendAsync(HttpMethod.Get, uriBuilder.Uri, string.Empty, encodeAuthToken(personalAccessToken), true);
+
+            var json = await result.Content.ReadAsStringAsync();
+
+            var responseObject = JObject.Parse(json);
+
+            // Look for the continuation token in the header and if not empty, add to the returning JObject
+            if (result.Headers.Contains("x-ms-continuationtoken"))
+            {
+                continuationToken = result.Headers.GetValues("x-ms-continuationtoken").FirstOrDefault();
+                
+                if (!string.IsNullOrWhiteSpace(continuationToken))
+                    responseObject.Add("continuationToken", continuationToken);
+            }
+
+            return responseObject;
+        }
+
         public async Task<JObject> GetBuilds(string baseAddress, string organizationName, string projectName,
             string personalAccessToken, List<long> definitionIds = default(List<long>), string minTime = null,
             string maxTime = null, int top = 0, string continuationToken = null, string apiVersion = "")

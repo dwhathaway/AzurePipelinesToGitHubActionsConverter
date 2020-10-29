@@ -7,9 +7,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
     public class StagesProcessing
     {
         private readonly bool _verbose;
+        private readonly List<VariableGroup> _variableGroups;
 
-        public StagesProcessing(bool verbose)
+        public StagesProcessing(List<VariableGroup> variableGroups, bool verbose = true)
         {
+            _variableGroups = variableGroups;
             _verbose = verbose;
         }
 
@@ -32,19 +34,19 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                     if (stageJson["dependsOn"] != null)
                     {
-                        GeneralProcessing gp = new GeneralProcessing(_verbose);
+                        var gp = new GeneralProcessing(_verbose);
                         stage.dependsOn = gp.ProcessDependsOnV2(stageJson["dependsOn"].ToString());
                     }
 
                     if (stageJson["variables"] != null)
                     {
-                        VariablesProcessing vp = new VariablesProcessing(_verbose);
+                        var vp = new VariablesProcessing(_variableGroups, _verbose);
                         stage.variables = vp.ProcessParametersAndVariablesV2(null, stageJson["variables"].ToString());
                     }
 
                     if (stageJson["jobs"] != null)
                     {
-                        JobProcessing jp = new JobProcessing(_verbose);
+                        var jp = new JobProcessing(_variableGroups, _verbose);
                         stage.jobs = jp.ExtractAzurePipelinesJobsV2(stageJson["jobs"], strategyYaml);
                     }
 
@@ -117,7 +119,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                 foreach (AzurePipelines.Job job in jobs)
                 {
-                    JobProcessing jobProcessing = new JobProcessing(_verbose);
+                    var jobProcessing = new JobProcessing(_variableGroups, _verbose);
                     gitHubJobs.Add(job.job, jobProcessing.ProcessJob(job, null));
                 }
 

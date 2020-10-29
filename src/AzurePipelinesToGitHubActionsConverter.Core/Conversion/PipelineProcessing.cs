@@ -9,10 +9,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         public List<string> VariableList;
         public string MatrixVariableName;
         private readonly bool _verbose;
+        private readonly List<VariableGroup> _variableGroups;
         private readonly bool _addWorkflowTrigger;
 
-        public PipelineProcessing(bool verbose, bool? addWorkflowTrigger = null)
+        public PipelineProcessing(List<VariableGroup> variableGroups, bool verbose = true, bool? addWorkflowTrigger = null)
         {
+            _variableGroups = variableGroups;
             _verbose = verbose;
             _addWorkflowTrigger = addWorkflowTrigger ?? false;
         }
@@ -29,8 +31,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             Dictionary<string, string> simpleVariables, AzurePipelines.Variable[] complexVariables)
         {
             VariableList = new List<string>();
-            GeneralProcessing generalProcessing = new GeneralProcessing(_verbose);
-            GitHubActionsRoot gitHubActions = new GitHubActionsRoot();
+            var generalProcessing = new GeneralProcessing(_verbose);
+            var gitHubActions = new GitHubActionsRoot();
 
             //Name
             if (azurePipeline.name != null)
@@ -45,7 +47,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
 
             //Triggers for pushs 
-            TriggerProcessing tp = new TriggerProcessing(_verbose);
+            var tp = new TriggerProcessing(_verbose);
             
             if (azurePipeline.trigger != null)
             {
@@ -271,13 +273,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            var vp = new VariablesProcessing(_verbose);
+            var vp = new VariablesProcessing(_variableGroups, _verbose);
 
             //Pool + Steps (When there are no jobs defined)
             if ((azurePipeline.pool != null && azurePipeline.jobs == null) || (azurePipeline.steps != null && azurePipeline.steps.Length > 0))
             {
                 //Steps only have one job, so we just create it here
-                StepsProcessing sp = new StepsProcessing();
+                var sp = new StepsProcessing();
 
                 gitHubActions.jobs = new Dictionary<string, GitHubActions.Job>
                 {
@@ -328,7 +330,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             if (jobs != null)
             {
-                JobProcessing jobProcessing = new JobProcessing(_verbose);
+                var jobProcessing = new JobProcessing(_variableGroups, _verbose);
                 newJobs = new Dictionary<string, GitHubActions.Job>();
 
                 for (int i = 0; i < jobs.Length; i++)
