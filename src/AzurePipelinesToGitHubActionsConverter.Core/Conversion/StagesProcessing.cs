@@ -1,6 +1,8 @@
 ﻿using AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines;
 using Newtonsoft.Json.Linq;
+using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 {
@@ -18,11 +20,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         public Dictionary<string, GitHubActions.Job> ProcessStagesV2(JToken stagesJson, string strategyYaml)
         {
             AzurePipelines.Job[] jobs = null;
-            List<AzurePipelines.Stage> stages = new List<AzurePipelines.Stage>();
+            var stages = new List<AzurePipelines.Stage>();
 
             if (stagesJson != null)
             {
-                //for each stage
+                // for each stage
                 foreach (JToken stageJson in stagesJson)
                 {
                     AzurePipelines.Stage stage = new AzurePipelines.Stage
@@ -53,7 +55,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     stages.Add(stage);
                 }
 
-                //process the jobs
+                // process the jobs
                 if (stages != null)
                 {
                     int jobCount = 0;
@@ -68,7 +70,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                     jobs = new AzurePipelines.Job[jobCount];
 
-                    //Giant nested loop ahead. Loop through stages, looking for all jobs
+                    // Giant nested loop ahead. Loop through stages, looking for all jobs
                     int jobIndex = 0;
 
                     foreach (Stage stage in stages)
@@ -83,13 +85,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                                 {
                                     if (jobs[jobIndex].variables == null)
                                     {
-                                        jobs[jobIndex].variables = new Dictionary<string, string>();
+                                        jobs[jobIndex].variables = new OrderedDictionary();
                                     }
 
-                                    foreach (KeyValuePair<string, string> stageVariable in stage.variables)
+                                    foreach (DictionaryEntry stageVariable in stage.variables)
                                     {
-                                        //Add the stage variable if it doesn't already exist
-                                        if (jobs[jobIndex].variables.ContainsKey(stageVariable.Key) == false)
+                                        // Add the stage variable if it doesn't already exist
+                                        if (jobs[jobIndex].variables.Contains(stageVariable.Key) == false)
                                         {
                                             jobs[jobIndex].variables.Add(stageVariable.Key, stageVariable.Value);
                                         }
@@ -101,9 +103,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                                     jobs[jobIndex].condition = stage.condition;
                                 }
 
-                                //Get the job name
+                                // Get the job name
                                 string jobName = ConversionUtility.GenerateJobName(stage.jobs[i], jobIndex);
-                                //Rename the job, using the stage name as prefix, so that we keep the job names unique
+                                // Rename the job, using the stage name as prefix, so that we keep the job names unique
                                 jobs[jobIndex].job = stage.stage + "_Stage_" + jobName;
                                 jobIndex++;
                             }
@@ -112,10 +114,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            //Build the final list of GitHub jobs and return it
+            // Build the final list of GitHub jobs and return it
             if (jobs != null)
             {
-                Dictionary<string, GitHubActions.Job> gitHubJobs = new Dictionary<string, GitHubActions.Job>();
+                var gitHubJobs = new Dictionary<string, GitHubActions.Job>();
 
                 foreach (AzurePipelines.Job job in jobs)
                 {

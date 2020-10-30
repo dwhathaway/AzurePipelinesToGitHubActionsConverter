@@ -1,6 +1,8 @@
 ﻿using AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines;
 using AzurePipelinesToGitHubActionsConverter.Core.GitHubActions;
+using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 {
@@ -28,25 +30,25 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         /// <returns>GitHub Actions object</returns>
         public GitHubActionsRoot ProcessPipeline(AzurePipelinesRoot<TTriggers, TVariables> azurePipeline,
             string[] simpleTrigger, AzurePipelines.Trigger complexTrigger,
-            Dictionary<string, string> simpleVariables, AzurePipelines.Variable[] complexVariables)
+            OrderedDictionary simpleVariables, AzurePipelines.Variable[] complexVariables)
         {
             VariableList = new List<string>();
             var generalProcessing = new GeneralProcessing(_verbose);
             var gitHubActions = new GitHubActionsRoot();
 
-            //Name
+            // Name
             if (azurePipeline.name != null)
             {
                 gitHubActions.name = azurePipeline.name;
             }
 
-            //Container
+            // Container
             if (azurePipeline.container != null)
             {
                 gitHubActions.messages.Add("TODO: Container conversion not yet done, we need help!: https://github.com/samsmithnz/AzurePipelinesToGitHubActionsConverter/issues/39");
             }
 
-            //Triggers for pushs 
+            // Triggers for pushs 
             var tp = new TriggerProcessing(_verbose);
             
             if (azurePipeline.trigger != null)
@@ -61,7 +63,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            //Triggers for pull requests
+            // Triggers for pull requests
             if (azurePipeline.pr != null)
             {
                 GitHubActions.Trigger pr = tp.ProcessPullRequest(azurePipeline.pr);
@@ -76,13 +78,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            //pool/demands
+            // pool/demands
             if (azurePipeline.pool != null && azurePipeline.pool.demands != null)
             {
                 gitHubActions.messages.Add("Note: GitHub Actions does not have a 'demands' command on 'runs-on' yet");
             }
 
-            //schedules
+            // schedules
             if (azurePipeline.schedules != null)
             {
                 string[] schedules = tp.ProcessSchedules(azurePipeline.schedules);
@@ -101,15 +103,16 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 gitHubActions.on = new WorkflowDispatchTrigger(gitHubActions.on);
             }
 
-            //Resources
+            // Resources
             if (azurePipeline.resources != null)
             {
-                //Note: Containers is in the jobs - this note should be removed once pipeliens and repositories is moved too
+                // Note: Containers is in the jobs - this note should be removed once pipeliens and repositories is moved too
 
-                //TODO: There is currently no conversion path for pipelines
+                // TODO: There is currently no conversion path for pipelines
                 if (azurePipeline.resources.pipelines != null)
                 {
                     gitHubActions.messages.Add("TODO: Resource pipelines conversion not yet done: https://github.com/samsmithnz/AzurePipelinesToGitHubActionsConverter/issues/8");
+                    
                     if (azurePipeline.resources.pipelines.Length > 0)
                     {
                         if (azurePipeline.resources.pipelines[0].pipeline != null)
@@ -152,7 +155,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     }
                 }
 
-                //TODO: There is currently no conversion path for repositories
+                // TODO: There is currently no conversion path for repositories
                 if (azurePipeline.resources.repositories != null)
                 {
                     gitHubActions.messages.Add("TODO: Resource repositories conversion not yet done: https://github.com/samsmithnz/AzurePipelinesToGitHubActionsConverter/issues/8");
@@ -197,10 +200,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            //Stages (Note: stages are not yet present in actions, we are merging them into one giant list of jobs, appending the stage name to jobs to keep names unique)
+            // Stages (Note: stages are not yet present in actions, we are merging them into one giant list of jobs, appending the stage name to jobs to keep names unique)
             if (azurePipeline.stages != null)
             {
-                //Count the number of jobs and initialize the jobs array with that number
+                // Count the number of jobs and initialize the jobs array with that number
                 int jobCounter = 0;
 
                 foreach (Stage stage in azurePipeline.stages)
@@ -212,7 +215,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
 
                 azurePipeline.jobs = new AzurePipelines.Job[jobCounter];
-                //We are going to take each stage and assign it a set of jobs
+                // We are going to take each stage and assign it a set of jobs
                 int currentIndex = 0;
 
                 foreach (Stage stage in azurePipeline.stages)
@@ -223,20 +226,20 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                         for (int i = 0; i < stage.jobs.Length; i++)
                         {
-                            //Get the job name
+                            // Get the job name
                             string jobName = ConversionUtility.GenerateJobName(stage.jobs[i], currentIndex);
-                            //Rename the job, using the stage name as prefix, so that we keep the job names unique
+                            // Rename the job, using the stage name as prefix, so that we keep the job names unique
                             stage.jobs[j].job = stage.stage + "_Stage_" + jobName;
                             ConversionUtility.WriteLine("This variable is not needed in actions: " + stage.displayName, _verbose);
                             azurePipeline.jobs[currentIndex] = stage.jobs[j];
                             azurePipeline.jobs[currentIndex].condition = stage.condition;
 
-                            //Move over the variables, the stage variables will need to be applied to each job
+                            // Move over the variables, the stage variables will need to be applied to each job
                             if (stage.variables != null && stage.variables.Count > 0)
                             {
-                                azurePipeline.jobs[currentIndex].variables = new Dictionary<string, string>();
+                                azurePipeline.jobs[currentIndex].variables = new OrderedDictionary();
 
-                                foreach (KeyValuePair<string, string> stageVariable in stage.variables)
+                                foreach (DictionaryEntry stageVariable in stage.variables)
                                 {
                                     azurePipeline.jobs[currentIndex].variables.Add(stageVariable.Key, stageVariable.Value);
                                 }
@@ -249,11 +252,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            //Jobs (when no stages are defined)
+            // Jobs (when no stages are defined)
             if (azurePipeline.jobs != null)
             {
-                //If there is a parent strategy, and no child strategy, load in the parent
-                //This is not perfect...
+                // If there is a parent strategy, and no child strategy, load in the parent
+                // This is not perfect...
                 if (azurePipeline.strategy != null)
                 {
                     foreach (AzurePipelines.Job item in azurePipeline.jobs)
@@ -275,10 +278,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             var vp = new VariablesProcessing(_variableGroups, _verbose);
 
-            //Pool + Steps (When there are no jobs defined)
+            // Pool + Steps (When there are no jobs defined)
             if ((azurePipeline.pool != null && azurePipeline.jobs == null) || (azurePipeline.steps != null && azurePipeline.steps.Length > 0))
             {
-                //Steps only have one job, so we just create it here
+                // Steps only have one job, so we just create it here
                 var sp = new StepsProcessing();
 
                 gitHubActions.jobs = new Dictionary<string, GitHubActions.Job>
@@ -299,7 +302,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 MatrixVariableName = generalProcessing.MatrixVariableName;
             }
 
-            //Variables
+            // Variables
             if (azurePipeline.variables != null)
             {
                 if (complexVariables != null)
@@ -315,17 +318,17 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
             else if (azurePipeline.parameters != null)
             {
-                //For now, convert the parameters to variables
+                // For now, convert the parameters to variables
                 gitHubActions.env = vp.ProcessSimpleVariables(azurePipeline.parameters);
             }
 
             return gitHubActions;
         }
 
-        //process the jobs
+        // process the jobs
         private Dictionary<string, GitHubActions.Job> ProcessJobs(AzurePipelines.Job[] jobs, Resources resources)
         {
-            //A dictonary is perfect here, as the job_id (a string), must be unique in the action
+            // A dictonary is perfect here, as the job_id (a string), must be unique in the action
             Dictionary<string, GitHubActions.Job> newJobs = null;
 
             if (jobs != null)

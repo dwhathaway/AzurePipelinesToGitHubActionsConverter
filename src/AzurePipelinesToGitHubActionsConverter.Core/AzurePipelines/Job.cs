@@ -1,7 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Text;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
 {
@@ -42,7 +41,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
         public int timeoutInMinutes { get; set; } = 0;
         [DefaultValue(1)]
         public int cancelTimeoutInMinutes { get; set; } = 1;
-        public Dictionary<string, string> variables { get; set; }
+        public OrderedDictionary variables { get; set; }
         public Step[] steps { get; set; }
         //TODO: There is currently no conversion path for services
         public Dictionary<string, string> services { get; set; }
@@ -75,8 +74,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
         public Environment environment { get; set; }
 
         public string template { get; set; }
-        public Dictionary<string, string> parameters { get; set; }
-
-
+        public OrderedDictionary parameters { get; set; }
     }
 }

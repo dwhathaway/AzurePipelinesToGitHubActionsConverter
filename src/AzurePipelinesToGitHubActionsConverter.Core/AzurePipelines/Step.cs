@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections.Specialized;
 using System.ComponentModel;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
@@ -95,8 +95,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
         public string workingDirectory { get; set; }
         public string failOnStderr { get; set; }
         public Target target { get; set; }
-        public Dictionary<string, string> inputs { get; set; }
-        public Dictionary<string, string> env { get; set; }
-        public Dictionary<string, string> parameters { get; set; }
+        public OrderedDictionary inputs { get; set; }
+        public OrderedDictionary env { get; set; }
+        public OrderedDictionary parameters { get; set; }
     }
 }
