@@ -13,6 +13,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
     //  paths:
     //    include: [ string ] # file paths which must match to trigger a build
     //    exclude: [ string ] # file paths which will not trigger a build
+    //  enabled:
+    //    added to handle the case where a trigger section is in the yaml file, but set to "none"
     public class Trigger
     {
         //Note: There is no batch property in actions
@@ -24,5 +26,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines
         public IncludeExclude branches { get; set; }
         public IncludeExclude tags { get; set; }
         public IncludeExclude paths { get; set; }
+        [DefaultValue(false)]
+        public bool enabled { get; set; } = false;
     }
 }
