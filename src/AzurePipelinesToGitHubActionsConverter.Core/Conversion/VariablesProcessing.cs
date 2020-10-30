@@ -41,14 +41,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             VariableList = new List<string>();
         }
 
-        //process all (simple) variables
+        // process all (simple) variables
         public OrderedDictionary ProcessSimpleVariables(OrderedDictionary variables)
         {
             if (variables != null)
             {
                 // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
-                // VariableList.AddRange(variables.Keys);
-
                 foreach (string key in variables.Keys)
                 {
                     VariableList.Add(key);
@@ -58,7 +56,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return variables;
         }
 
-        //process all (complex) variables
+        // process all (complex) variables
         public OrderedDictionary ProcessComplexVariables(AzurePipelines.Variable[] variables)
         {
             var processedVariables = new OrderedDictionary();
@@ -68,14 +66,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
                 for (int i = 0; i < variables.Length; i++)
                 {
-                    //name/value pairs
+                    // name/value pairs
                     if (variables[i].name != null && variables[i].value != null)
                     {
                         processedVariables.Add(variables[i].name, variables[i].value);
                         VariableList.Add(variables[i].name);
                     }
 
-                    //groups
+                    // groups
                     if (variables[i].group != null)
                     {
                         if (!processedVariables.Contains(GroupKey))
@@ -88,7 +86,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         }
                     }
 
-                    //template
+                    // template
                     if (variables[i].template != null)
                     {
                         processedVariables.Add("template", variables[i].template);
@@ -108,14 +106,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
                 for (int i = 0; i < variables.Count; i++)
                 {
-                    //name/value pairs
+                    // name/value pairs
                     if (variables[i].name != null && variables[i].value != null)
                     {
                         processedVariables.Add(variables[i].name, variables[i].value);
                         VariableList.Add(variables[i].name);
                     }
 
-                    //groups
+                    // groups
                     if (variables[i].group != null)
                     {
                         if (processedVariables.ContainsKey(GroupKey) == false)
@@ -128,7 +126,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         }
                     }
 
-                    //template
+                    // template
                     if (variables[i].template != null)
                     {
                         processedVariables.Add("template", variables[i].template);
@@ -148,7 +146,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
                 for (int i = 0; i < parameter.Count; i++)
                 {
-                    //name/value pairs
+                    // name/value pairs
                     if (parameter[i].name != null )
                     {
                         if (parameter[i].@default == null)
@@ -259,13 +257,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return variableList;
         }
 
-        //Search GitHub object for all environment variables
+        // Search GitHub object for all environment variables
         public void ProcessEnvVars(GitHubActionsRoot gitHubActions)
         {
             DictionaryEntry[] rawEnvValues = null;
 
             // We want to 1) Identify env vars at the workflow, stage/job level(s)
-            //  2) Pre-process these var values to see if they refer to other env vars, as the syntax rules are nuanced
+            // 2) Pre-process these var values to see if they refer to other env vars, as the syntax rules are nuanced
             if (gitHubActions.env != null)
             {
                 // grab the initial values here before processing, so we can compare job vs wf level env
@@ -397,7 +395,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 string item = list[i];
 
-                //Remove leading "$(" and trailing ")"
+                // Remove leading "$(" and trailing ")"
                 if (list[i].Length > 3)
                 {
                     list[i] = list[i].Substring(0, item.Length - 1);
@@ -426,7 +424,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 string item = list[i];
 
-                //Remove leading "${{" and trailing "}}"
+                // Remove leading "${{" and trailing "}}"
                 if (list[i].Length > 5)
                 {
                     list[i] = list[i].Substring(0, item.Length - 2);
@@ -446,7 +444,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         public MatchCollection FindPipelineVariables(string input, string varNamePattern)
         {
             // match "varNamePattern" in ${}, ${{}}, $(), $[], but NOT $var
-            //  Allowed ADO var chars here: https://docs.microsoft.com/en-us/azure/devops/pipelines/process/variables?view=azure-devops&tabs=yaml%2Cbatch#variable-characters
+            // Allowed ADO var chars here: https://docs.microsoft.com/en-us/azure/devops/pipelines/process/variables?view=azure-devops&tabs=yaml%2Cbatch#variable-characters
             var varPattern = @"\$(?:\{|\{|\(|\[|\{\{)(" + varNamePattern + @")(?:\}\}|\}|\]|\})?(?:\}\}|\]|\)|\}|\})";
 
             return Regex.Matches(input, varPattern, RegexOptions.IgnoreCase);
