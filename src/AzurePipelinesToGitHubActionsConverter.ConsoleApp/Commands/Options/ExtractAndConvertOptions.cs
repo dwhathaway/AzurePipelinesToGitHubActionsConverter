@@ -38,5 +38,11 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Commands.Options
 
         [Option('f', "addWorkflowTrigger", Required = false, Default = false, HelpText = "Whether or not to add a workflow_dispatch trigger to the resulting GitHub Actions workflow")]
         public bool? AddWorkflowTrigger { get; set; }
+
+        [Option('k', "keyVaultName", Required = false, HelpText = "Name of an Azure Key Vault containing the secrets you wish to access")]
+        public string KeyVaultName { get; set; }
+
+        [Option('s', "keyVaultSecrets", Required = false, HelpText = "Comma delimited list of secrets to read from the supplied Key Vault name")]
+        public string keyVaultSecrets { get; set; }
     }
 }

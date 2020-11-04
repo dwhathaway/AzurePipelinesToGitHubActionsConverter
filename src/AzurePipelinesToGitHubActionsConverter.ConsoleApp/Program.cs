@@ -127,6 +127,16 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
         {
             int retVal = 0;
 
+            try
+            {
+                CheckKeyVaultArgs(opts);
+            }
+            catch(Exception e)
+            {
+                LogErrorToConsole(e.ToString());
+                return -1;
+            }
+            
             // Check for a provided baseUrl.  If not provided, default
             string baseUrl = !string.IsNullOrWhiteSpace(opts.BaseUrl)
                 ? opts.BaseUrl
@@ -181,7 +191,13 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                 foreach (var yamlPipeline in yamlPipelines)
                 {
                     var pipelineId = yamlPipeline["id"].Value<long>();
-                    var repositoryName = yamlPipeline["repository"]["properties"]["shortName"].Value<string>();
+                    string repositoryName = string.Empty;
+
+                    // If code is in Azure Repos, there will be no shortName property, should we just use fullname always?
+                    if (yamlPipeline["repository"]["properties"]["shortName"] != null)
+                        repositoryName = yamlPipeline["repository"]["properties"]["shortName"].Value<string>();
+                    else
+                        repositoryName = yamlPipeline["repository"]["properties"]["fullName"].Value<string>();
 
                     var task1 = adoService.GetPipelineYaml(baseUrl, opts.Account, opts.Project,
                         opts.PersonalAccessToken, pipelineId, "6.1-preview.1");
@@ -218,28 +234,20 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
 
                             if (result.comments != null && result.comments.Count > 0)
                             {
-                                Console.ForegroundColor = ConsoleColor.Yellow;
-
-                                Console.WriteLine($"Pipeline {yamlFullFilename} partially converted");
+                                LogWarningToConsole($"Pipeline {yamlFullFilename} partially converted");
 
                                 result.comments.ForEach((comment) =>
                                 {
-                                    Console.WriteLine(comment);
+                                    LogWarningToConsole(comment);
 
                                     if (comment.Contains("#Note: Error! This step does not have a conversion path yet")
                                        && !_missingConverters.Contains(comment))
                                         _missingConverters.Add(comment);
-                                });
-
-                                Console.ResetColor();
+                                });                             
                             }
                             else
                             {
-                                Console.ForegroundColor = ConsoleColor.Green;
-
-                                Console.WriteLine($"Successfully converted {yamlFullFilename}");
-
-                                Console.ResetColor();
+                                LogSuccessToConsole($"Successfully converted {yamlFullFilename}");
                             }
 
                             // Write the output file
@@ -247,11 +255,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                         }
                         catch (Exception e)
                         {
-                            Console.ForegroundColor = ConsoleColor.Red;
-
-                            Console.WriteLine($"An error occured converting your pipeline");
-                            Console.WriteLine(e.ToString());
-                            Console.ResetColor();
+                            LogErrorToConsole(e.ToString());
 
                             retVal = -1;
                         }
@@ -271,6 +275,47 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
             }
 
             return retVal;
+        }
+
+        #region Console Logging
+        private static void LogSuccessToConsole(string s)
+        {
+            LogToConsole(s, ConsoleColor.Green);
+        }
+        private static void LogWarningToConsole(string s)
+        {
+            LogToConsole(s, ConsoleColor.Yellow);
+        }
+        private static void LogErrorToConsole(string s)
+        {
+            LogToConsole($"An error occured converting your pipeline", ConsoleColor.Red);
+            LogToConsole(s, ConsoleColor.Red);
+        }
+        private static void LogToConsole(Exception e, ConsoleColor c)
+        {
+            Console.ForegroundColor = c;
+            Console.WriteLine(e.ToString());
+            Console.ResetColor();
+        }
+        private static void LogToConsole(string s, ConsoleColor c)
+        {
+            Console.ForegroundColor = c;
+            Console.WriteLine(s);
+            Console.ResetColor();
+        }
+        #endregion
+
+        private static void CheckKeyVaultArgs(ExtractAndConvertOptions opts)
+        {
+            //if (String.IsNullOrEmpty(opts.KeyVaultName) && String.IsNullOrEmpty(opts.keyVaultSecrets))
+            //{
+            //    return;
+            //}
+            if (String.IsNullOrEmpty(opts.KeyVaultName) && !String.IsNullOrEmpty(opts.keyVaultSecrets))
+            {
+                throw new Exception("You must provide a 'keyVaultName' when using the 'keyVaultSecrets' attribute");
+            }
+
         }
 
         /// <summary>
