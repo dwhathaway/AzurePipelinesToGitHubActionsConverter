@@ -24,7 +24,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private Dictionary<string, string> SystemVarMapping = new Dictionary<string, string>()
         {
-            { "Agent.WorkFolder", "runner.workspace" },
+            { "Agent.WorkFolder", "github.workspace" }, // runner.workspace will not validate in Job-level env
             { "Build.BuildId", "github.run_id" },
             { "Build.BuildNumber", "github.run_number" },
             { "Build.DefinitionName", "github.workflow" },
