@@ -19,7 +19,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
         {
             string yaml = GenericObjectSerialization.SerializeYaml<GitHubActionsRoot>(gitHubActions);
 
-            yaml = ProcessGitHubActionYAML(yaml, variablesProcessing, matrixVariableName);
+            yaml = ProcessGitHubActionYAML(yaml, variablesProcessing, gitHubActions.messages, matrixVariableName);
 
             return yaml;
         }
@@ -28,19 +28,22 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
         {
             string yaml = GenericObjectSerialization.SerializeYaml<GitHubActions.Job>(gitHubActionJob);
 
+            var messages = new List<string>();
+
             yaml = ProcessGitHubActionYAML(yaml, variablesProcessing);
+
             yaml = StepsPostProcessing(yaml);
 
             return yaml;
         }
 
-        private static string ProcessGitHubActionYAML(string yaml, VariablesProcessing variablesProcessing, string matrixVariableName = null)
+        private static string ProcessGitHubActionYAML(string yaml, VariablesProcessing variablesProcessing, List<string> messages = null, string matrixVariableName = null)
         {
             // Fix some variables for serialization, the '-' character is not valid in C# property names, and some of the YAML standard uses reserved words (e.g. if)
             yaml = PrepareYamlPropertiesForGitHubSerialization(yaml);
 
             // update variables from the $(variableName) format to ${{variableName}} format
-            yaml = variablesProcessing.ProcessVariableConversions(yaml, matrixVariableName);
+            yaml = variablesProcessing.ProcessVariableConversions(yaml, messages, matrixVariableName);
 
             // If there is a cron in the conversion, we need to do a special processing to remove the quotes. 
             // This is hella custom and ugly, but otherwise the yaml comes out funky

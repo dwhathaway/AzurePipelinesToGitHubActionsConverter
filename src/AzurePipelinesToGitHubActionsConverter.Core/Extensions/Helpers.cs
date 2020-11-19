@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.Extensions
@@ -24,6 +25,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Extensions
         public static string StringValue(this DictionaryEntry de)
         {
             return de.Value as string;
+        }
+
+        public static void AddIfUnique<T>(this List<T> list, T item)
+        {
+            if (!list.Contains(item))
+            {
+                list.Add(item);
+            }
         }
     }
 }

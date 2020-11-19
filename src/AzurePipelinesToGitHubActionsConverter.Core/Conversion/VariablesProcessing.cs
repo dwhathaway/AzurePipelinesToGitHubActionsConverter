@@ -396,7 +396,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         }
                     }
 
-                    actionsRoot.messages.Add($"Note: The consumed values from a variable group ({ varGroup.name }) has been imported from Azure DevOps. Please review varable usage and any secret values used in this workflow, which have been migrated to GitHub secrets syntax");
+                    actionsRoot.messages.AddIfUnique($"Note: The consumed values from a variable group ({ varGroup.name }) has been imported from Azure DevOps. Please review varable usage and any secret values used in this workflow, which have been migrated to GitHub secrets syntax");
                 }
 
                 var envVars = new string[envVarTable.Count];
@@ -513,12 +513,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return matches.Cast<Match>().Select(m => m.Groups[1].Value.Trim());
         }
 
-        public bool IsKeyVaultGroupVar(string varName)
-        {
-            return secrets.Contains(varName) && (KeyVaultGroup?.variables.ContainsKey(varName) ?? false);
-        }
-
-        public string ProcessVariableConversions(string yaml, string matrixVariableName = null)
+        public string ProcessVariableConversions(string yaml, List<string> messages, string matrixVariableName = null)
         {
             // Replace variables with the format "${{ [prefix.]MyVar }}"
             var matches = FindPipelineVariables(yaml);
@@ -575,6 +570,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         {
                             // Not prefixed, convert the syntax
                             yaml = yaml.Replace(match.Value, $"${{{{ env.{ varName } }}}}");
+                        }
+                        else if (varParts[0] != "secrets") // possibly have an unmapped system var here that we should notify was not converted
+                        {
+                            messages?.AddIfUnique($"Variable conversions completed but unable to convert { varName }");
                         }
                     }
                 }
