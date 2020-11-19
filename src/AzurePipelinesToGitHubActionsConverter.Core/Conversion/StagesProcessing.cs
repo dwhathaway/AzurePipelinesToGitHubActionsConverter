@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Linq;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 {
@@ -79,6 +80,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             for (int i = 0; i < stage.jobs.Length; i++)
                             {
                                 jobs[jobIndex] = stage.jobs[i];
+
+                                // propagate stage dependency to the Job level
+                                if (stage.dependsOn?.Length > 0)
+                                {
+                                    var dependsOnJobs = stages.Where(s => stage.dependsOn.Contains(s.stage)).Select(s => s.jobs.Last());
+                                    jobs[jobIndex].dependsOn = dependsOnJobs.Select(j => j.job).ToArray();
+                                }
 
                                 if (stage.variables != null)
                                 {
