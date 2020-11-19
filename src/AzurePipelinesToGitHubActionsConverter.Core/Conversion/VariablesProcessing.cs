@@ -33,6 +33,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             { "Build.SourceBranch", "github.ref" },
             { "Build.SourceBranchName", "github.ref" }, // not exact mapping "main" vs "refs/heads/main"
             { "Build.RepositoryName", "github.repository" }, // not exact mapping [repo name] vs [account/org name]/[repo name]
+            { "Pipeline.Workspace", "runner.workspace" }, // should this be mapped to github.workspace?
             { "rev:r", "github.run_number" }
         };
 
