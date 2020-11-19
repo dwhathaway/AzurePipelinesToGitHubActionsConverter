@@ -1,7 +1,19 @@
-﻿using System.Collections.Specialized;
+﻿using System;
+using System.Collections.Specialized;
+using YamlDotNet.Serialization;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.GitHubActions
 {
+    [Flags]
+    public enum StepDependencies
+    {
+        None = 0,
+        AzureLogin = 1,
+        JavaSetup = 2,
+        GradleSetup = 4,
+        MSBuildSetup = 8
+    }
+    
     public class Step
     {
         public string name { get; set; }
@@ -36,6 +48,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.GitHubActions
 
         public OrderedDictionary env { get; set; } // Similar to the job env: https://help.github.com/en/articles/workflow-syntax-for-github-actions#jobsjob_idenv
 
+        public string id { get; set; }
+
         // as "if" is a reserved word in C#, added an "_", and remove this "_" when serializing
         public string _if { get; set; } // https://help.github.com/en/articles/workflow-syntax-for-github-actions#jobsjob_idif
 
@@ -44,5 +58,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.GitHubActions
         public int timeout_minutes { get; set; }
 
         public string step_message;
+
+        [YamlIgnore]
+        public StepDependencies DependsOn { get; set; }
+
+        public bool IsDependentOn(StepDependencies dependsOn)
+        {
+            return ((DependsOn & dependsOn) == dependsOn);
+        }
     }
 }

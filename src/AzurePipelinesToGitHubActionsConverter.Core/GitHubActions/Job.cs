@@ -1,4 +1,5 @@
-﻿using System.Collections.Specialized;
+﻿using System.Collections.Generic;
+using System.Collections.Specialized;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.GitHubActions
 {
@@ -25,7 +26,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.GitHubActions
 
         public bool continue_on_error { get; set; }
 
-        public Step[] steps { get; set; } //https://help.github.com/en/articles/workflow-syntax-for-github-actions#jobsjob_idsteps
+        public List<Step> steps { get; set; } //https://help.github.com/en/articles/workflow-syntax-for-github-actions#jobsjob_idsteps
 
         public string job_message;
     }

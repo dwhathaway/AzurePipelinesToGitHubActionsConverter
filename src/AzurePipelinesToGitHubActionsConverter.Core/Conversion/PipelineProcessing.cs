@@ -11,12 +11,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         public List<string> VariableList;
         public string MatrixVariableName;
         private readonly bool _verbose;
-        private readonly List<VariableGroup> _variableGroups;
+        private readonly VariablesProcessing _variableProcessing;
         private readonly bool _addWorkflowTrigger;
 
-        public PipelineProcessing(List<VariableGroup> variableGroups, bool verbose = true, bool? addWorkflowTrigger = null)
+        public PipelineProcessing(VariablesProcessing vp, bool verbose = true, bool? addWorkflowTrigger = null)
         {
-            _variableGroups = variableGroups;
+            _variableProcessing = vp;
             _verbose = verbose;
             _addWorkflowTrigger = addWorkflowTrigger ?? false;
         }
@@ -276,8 +276,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            var vp = new VariablesProcessing(_variableGroups, _verbose);
-
             // Pool + Steps (When there are no jobs defined)
             if ((azurePipeline.pool != null && azurePipeline.jobs == null) || (azurePipeline.steps != null && azurePipeline.steps.Length > 0))
             {
@@ -294,7 +292,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             strategy = generalProcessing.ProcessStrategy(azurePipeline.strategy),
                             container = generalProcessing.ProcessContainer(azurePipeline.resources),
                             //resources = ProcessResources(azurePipeline.resources),
-                            steps = sp.AddSupportingSteps(azurePipeline.steps, vp)
+                            steps = sp.AddSupportingSteps(azurePipeline.steps, _variableProcessing, simpleVariables)
                         }
                     }
                 };
@@ -307,19 +305,19 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 if (complexVariables != null)
                 {
-                    gitHubActions.env = vp.ProcessComplexVariables(complexVariables);
-                    VariableList.AddRange(vp.VariableList);
+                    gitHubActions.env = _variableProcessing.ProcessComplexVariables(complexVariables);
+                    VariableList.AddRange(_variableProcessing.VariableList);
                 }
                 else if (simpleVariables != null)
                 {
-                    gitHubActions.env = vp.ProcessSimpleVariables(simpleVariables);
-                    VariableList.AddRange(vp.VariableList);
+                    gitHubActions.env = _variableProcessing.ProcessSimpleVariables(simpleVariables);
+                    VariableList.AddRange(_variableProcessing.VariableList);
                 }
             }
             else if (azurePipeline.parameters != null)
             {
                 // For now, convert the parameters to variables
-                gitHubActions.env = vp.ProcessSimpleVariables(azurePipeline.parameters);
+                gitHubActions.env = _variableProcessing.ProcessSimpleVariables(azurePipeline.parameters);
             }
 
             return gitHubActions;
@@ -333,7 +331,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             if (jobs != null)
             {
-                var jobProcessing = new JobProcessing(_variableGroups, _verbose);
+                var jobProcessing = new JobProcessing(_variableProcessing, _verbose);
                 newJobs = new Dictionary<string, GitHubActions.Job>();
 
                 for (int i = 0; i < jobs.Length; i++)

@@ -13,51 +13,50 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         public List<string> VariableList;
         public string MatrixVariableName;
         private readonly bool _verbose;
-        private readonly List<VariableGroup> _variableGroups;
+        private readonly VariablesProcessing _variableProcessing;
 
-        public JobProcessing(List<VariableGroup> variableGroups, bool verbose)
+        public JobProcessing(VariablesProcessing variableProcessing, bool verbose)
         {
-            _variableGroups = variableGroups;
+            _variableProcessing = variableProcessing;
             _verbose = verbose;
         }
 
         public GitHubActions.Job ProcessJob(AzurePipelines.Job job, AzurePipelines.Resources resources)
         {
             var generalProcessing = new GeneralProcessing(_verbose);
-            var vp = new VariablesProcessing(_variableGroups, _verbose);
             var sp = new StepsProcessing();
 
-            GitHubActions.Job newJob = new GitHubActions.Job
+            var newJob = new GitHubActions.Job
             {
                 name = job.displayName,
                 needs = job.dependsOn,
-                _if = ConditionsProcessing.TranslateConditions(job.condition, vp, context: job),
+                _if = ConditionsProcessing.TranslateConditions(job.condition, _variableProcessing, context: job),
                 runs_on = generalProcessing.ProcessPool(job.pool),
                 strategy = generalProcessing.ProcessStrategy(job.strategy),
                 container = generalProcessing.ProcessContainer(resources),
-                env = vp.ProcessSimpleVariables(job.variables),
+                env = _variableProcessing.ProcessSimpleVariables(job.variables),
                 timeout_minutes = job.timeoutInMinutes,
-                steps = sp.AddSupportingSteps(job.steps, vp)
+                steps = sp.AddSupportingSteps(job.steps, _variableProcessing, job.variables)
             };
 
             MatrixVariableName = generalProcessing.MatrixVariableName;
-            VariableList = vp.VariableList;
+            VariableList = _variableProcessing.VariableList;
 
             if (newJob.steps == null & job.template != null)
             {
-                //Initialize the array with no items
+                // Initialize the array with no items
                 job.steps = new AzurePipelines.Step[0];
                 // Process the steps, adding the default checkout step
-                newJob.steps = sp.AddSupportingSteps(job.steps, vp);
+                newJob.steps = sp.AddSupportingSteps(job.steps, _variableProcessing, job.variables);
                 // TODO: There is currently no conversion path for templates
                 newJob.job_message += "Note: Azure DevOps template does not have an equivalent in GitHub Actions yet";
             }
             else if (newJob.steps == null && job.strategy?.runOnce?.deploy?.steps != null)
             {
-                //Initialize the array with no items
+                // Initialize the array with no items
                 job.steps = new AzurePipelines.Step[0];
                 // Process the steps, DO NOT add the default checkout step
-                newJob.steps = sp.AddSupportingSteps(job.strategy?.runOnce?.deploy?.steps, vp, false);
+                newJob.steps = sp.AddSupportingSteps(job.strategy?.runOnce?.deploy?.steps, _variableProcessing, job.variables, false);
                 // TODO: There is currently no conversion path for templates
                 newJob.job_message += "Note: Azure DevOps strategy>runOnce>deploy does not have an equivalent in GitHub Actions yet";
             }
@@ -84,7 +83,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 
                 foreach (AzurePipelines.Job job in jobs)
                 {
-                    JobProcessing jobProcessing = new JobProcessing(_variableGroups, _verbose);
+                    var jobProcessing = new JobProcessing(_variableProcessing, _verbose);
                     string jobName = job.job;
 
                     if (jobName == null && job.deployment != null)
@@ -100,18 +99,16 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     MatrixVariableName = jobProcessing.MatrixVariableName;
                     i++;
                 }
+
                 return gitHubJobs;
             }
-            else
-            {
-                return null;
-            }
+            
+            return null;
         }
 
         public AzurePipelines.Job[] ExtractAzurePipelinesJobsV2(JToken jobsJson, string strategyYaml)
         {
             var gp = new GeneralProcessing(_verbose);
-            var vp = new VariablesProcessing(_variableGroups, _verbose);
             var jobs = new AzurePipelines.Job[jobsJson.Count()];
 
             if (jobsJson != null)
@@ -120,7 +117,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                 foreach (JToken jobJson in jobsJson)
                 {
-                    AzurePipelines.Job job = new AzurePipelines.Job
+                    var job = new AzurePipelines.Job
                     {
                         job = jobJson["job"]?.ToString(),
                         deployment = jobJson["deployment"]?.ToString(),
@@ -149,7 +146,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                     if (jobJson["condition"] != null)
                     {
-                        job.condition = ConditionsProcessing.TranslateConditions(jobJson["condition"].ToString(), vp);
+                        job.condition = ConditionsProcessing.TranslateConditions(jobJson["condition"].ToString(), _variableProcessing);
                     }
 
                     if (jobJson["environment"] != null)
@@ -175,7 +172,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                     if (jobJson["variables"] != null)
                     {
-                        job.variables = vp.ProcessParametersAndVariablesV2(null, jobJson["variables"].ToString());
+                        job.variables = _variableProcessing.ProcessParametersAndVariablesV2(null, jobJson["variables"].ToString());
                     }
 
                     if (jobJson["steps"] != null)
@@ -204,7 +201,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             if (poolYaml != null)
             {
-                GeneralProcessing gp = new GeneralProcessing(_verbose);
+                var gp = new GeneralProcessing(_verbose);
                 pool = gp.ProcessPoolV2(poolYaml);
             }
 
@@ -212,7 +209,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             try
             {
-                //Most often, the pool will be in this structure
+                // Most often, the pool will be in this structure
                 strategy = GenericObjectSerialization.DeserializeYaml<AzurePipelines.Strategy>(strategyYaml);
             }
             catch (Exception ex)
@@ -234,26 +231,24 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            AzurePipelines.Job job = new AzurePipelines.Job
+            var job = new AzurePipelines.Job
             {
                 pool = pool,
                 strategy = strategy,
                 steps = steps
             };
 
-            //Don't add the build name unless there is content
+            // Don't add the build name unless there is content
             if (job.pool != null || job.strategy != null || steps != null)
             {
-                AzurePipelines.Job[] jobs = new AzurePipelines.Job[1];
+                var jobs = new AzurePipelines.Job[1];
                 job.job = "build";
                 jobs[0] = job;
 
                 return jobs;
             }
-            else
-            {
-                return null;
-            }
+            
+            return null;
         }
     }
 }

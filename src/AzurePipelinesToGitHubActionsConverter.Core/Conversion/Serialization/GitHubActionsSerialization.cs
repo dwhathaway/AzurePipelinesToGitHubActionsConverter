@@ -36,15 +36,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
 
         private static string ProcessGitHubActionYAML(string yaml, VariablesProcessing variablesProcessing, string matrixVariableName = null)
         {
-            //Fix some variables for serialization, the '-' character is not valid in C# property names, and some of the YAML standard uses reserved words (e.g. if)
+            // Fix some variables for serialization, the '-' character is not valid in C# property names, and some of the YAML standard uses reserved words (e.g. if)
             yaml = PrepareYamlPropertiesForGitHubSerialization(yaml);
 
             // update variables from the $(variableName) format to ${{variableName}} format
             yaml = variablesProcessing.ProcessVariableConversions(yaml, matrixVariableName);
 
-            //If there is a cron in the conversion, we need to do a special processing to remove the quotes. 
-            //This is hella custom and ugly, but otherwise the yaml comes out funky
-            //Here we look at every line, removing the double quotes
+            // If there is a cron in the conversion, we need to do a special processing to remove the quotes. 
+            // This is hella custom and ugly, but otherwise the yaml comes out funky
+            // Here we look at every line, removing the double quotes
             if (yaml.IndexOf("cron") >= 0)
             {
                 StringBuilder processedYaml = new StringBuilder();
@@ -107,7 +107,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
 
         private static string PrepareYamlPropertiesForGitHubSerialization(string yaml)
         {
-            //Fix some variables that we can't use for property names because the "-" character is not allowed in c# properties, or it's a reserved word (e.g. if)
+            // Fix some variables that we can't use for property names because the "-" character is not allowed in c# properties, or it's a reserved word (e.g. if)
             yaml = yaml.Replace("runs_on", "runs-on");
             yaml = yaml.Replace("_if", "if");
             yaml = yaml.Replace("timeout_minutes", "timeout-minutes");
@@ -122,8 +122,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             yaml = yaml.Replace("step_message", "#");
             yaml = yaml.Replace("job_message", "#");
 
-            //HACK: Sometimes when generating  yaml, a weird ">+" string appears, which we replace out. This is a known bug, but there is no known fix yet. https://github.com/aaubry/YamlDotNet/issues/449
-            //This replaces a weird artifact in scripts when converting pipes, the order matters, and this is not a long term solution...
+            // HACK: Sometimes when generating  yaml, a weird ">+" string appears, which we replace out. This is a known bug, but there is no known fix yet. https://github.com/aaubry/YamlDotNet/issues/449
+            // This replaces a weird artifact in scripts when converting pipes, the order matters, and this is not a long term solution...
             yaml = yaml.Replace("run: >-", "run: |");
             yaml = yaml.Replace("run: >2-\r\n     |", "run: |");
             yaml = yaml.Replace("run: >2-\r\n         |", "run: |");
@@ -139,25 +139,25 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             return yaml;
         }
 
-        //Strip the steps off to focus on just the individual step
+        // Strip the steps off to focus on just the individual step
         private static string StepsPostProcessing(string input)
         {
-            if (input.Trim().StartsWith("steps:") == true)
+            if (input.Trim().StartsWith("steps:"))
             {
-                //we need to remove steps, before we do, we need to see if the task needs to remove indent
+                // we need to remove steps, before we do, we need to see if the task needs to remove indent
                 string[] stepLines = input.Split(Environment.NewLine);
 
                 if (stepLines.Length > 0)
                 {
                     int i = 0;
 
-                    //Search for the first non empty line
-                    while (string.IsNullOrEmpty(stepLines[i].Trim()) == true || stepLines[i].Trim().StartsWith("steps:") == true)
+                    // Search for the first non empty line
+                    while (string.IsNullOrEmpty(stepLines[i].Trim()) || stepLines[i].Trim().StartsWith("steps:"))
                     {
                         i++;
                     }
 
-                    if (stepLines[i].StartsWith("-") == true)
+                    if (stepLines[i].StartsWith("-"))
                     {
                         int indentLevel = stepLines[i].IndexOf("-");
                         //if (indentLevel >= 2)
@@ -169,7 +169,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
 
                         foreach (string line in stepLines)
                         {
-                            if (line.Trim().StartsWith("steps:") == false)
+                            if (!line.Trim().StartsWith("steps:"))
                             {
                                 newInput.Append(buffer);
                                 newInput.Append(line);

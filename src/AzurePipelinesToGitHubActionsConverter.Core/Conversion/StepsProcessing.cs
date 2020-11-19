@@ -575,22 +575,53 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         public GitHubActions.Step CreateAzureLoginStep()
         {
             // Goal:
-            // - name: Log into Azure
-            //   uses: azure/login@v1
+            // - name: Azure Login
+            //   uses: Azure/login@v1
             //   with:
             //     creds: ${{ secrets.AZURE_SP }}
             var gitHubStep = new GitHubActions.Step
             {
                 name = "Azure Login",
-                uses = "azure/login@v1",
+                uses = "Azure/login@v1",
                 with = new OrderedDictionary
                 {
-                    {"creds","${{ secrets.AZURE_SP }}" }
-                }
+                    { "creds", "${{ secrets.AZURE_SP }}" }
+                },
+                id = "AzureLogin"
             };
 
             // Add note that 'AZURE_SP' secret is required
             gitHubStep.step_message = @"Note: 'AZURE_SP' secret is required to be setup and added into GitHub Secrets: https://help.github.com/en/actions/automating-your-workflow-with-github-actions/creating-and-using-encrypted-secrets";
+
+            return gitHubStep;
+        }
+
+        public GitHubActions.Step CreateAzureKeyVaultStep(VariableGroup keyVaultGroup, IEnumerable<string> secrets = null)
+        {
+            // Goal:
+            // - name: Retrieve Key Vault Secrets
+            //   uses: Azure/get-keyvault-secrets@v1.1
+            //   with:
+            //     keyvault: <kv Name>
+            //     secrets: 'one,two,three'
+            var gitHubStep = new GitHubActions.Step
+            {
+                name = "Retrieve Key Vault Secrets",
+                uses = "Azure/get-keyvault-secrets@v1.1",
+                with = new OrderedDictionary
+                {
+                    { "keyvault", keyVaultGroup.name }
+                },
+                id = keyVaultGroup.name,
+                DependsOn = GitHubActions.StepDependencies.AzureLogin
+            };
+
+            if (secrets == null) // if no list is passed, we'll create a list with ALL secrets here, and whittle it down later once we've discovered which secrets are consumed
+            {
+                secrets = keyVaultGroup.variables.Select(v => v.Key);
+            }
+
+            gitHubStep.with.Add("secrets", $"{ string.Join(",", secrets) }");
 
             return gitHubStep;
         }
@@ -602,7 +633,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 uses = "actions/setup-dotnet@v1",
                 with = new OrderedDictionary
                 {
-                    {"dotnet-version", GetStepInput(step, "version")}
+                    { "dotnet-version", GetStepInput(step, "version") }
                 }
             };
             // Pipelines
@@ -664,16 +695,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 script += parameters;
             }
 
-            var gitHubStep = new GitHubActions.Step
+            return new GitHubActions.Step
             {
                 uses = "Azure/cli@v1.0.0",
                 with = new OrderedDictionary
                 {
-                    { "inlineScript", script}
-                }
+                    { "inlineScript", script }
+                },
+                DependsOn = GitHubActions.StepDependencies.AzureLogin
             };
-
-            return gitHubStep;
         }
 
         private GitHubActions.Step CreateAzureWebAppDeploymentStep(AzurePipelines.Step step)
@@ -687,7 +717,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             var gitHubStep = new GitHubActions.Step
             {
                 uses = "Azure/webapps-deploy@v2",
-                with = new OrderedDictionary()
+                with = new OrderedDictionary(),
+                DependsOn = GitHubActions.StepDependencies.AzureLogin
             };
 
             if (webappName != null)
@@ -835,9 +866,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 uses = "azure/sql-action@v1",
                 with = new OrderedDictionary
                 {
-                    { "server-name", serverName},
-                    { "connection-string", "${{ secrets.AZURE_SQL_CONNECTION_STRING }}"},
-                    { "dacpac-package", dacPacFile},
+                    { "server-name", serverName },
+                    { "connection-string", "${{ secrets.AZURE_SQL_CONNECTION_STRING }}" },
+                    { "dacpac-package", dacPacFile },
                     { "arguments", arguments }
                 },
                 step_message = "Note: Connection string needs to be specified - this is different than Pipelines where the server, database, user, and password were specified separately. It's recommended you use secrets for the connection string."
@@ -914,6 +945,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             // To script
             var gitHubStep = CreateScriptStep("", step);
             gitHubStep.run = run;
+            gitHubStep.DependsOn = GitHubActions.StepDependencies.MSBuildSetup;
 
             return gitHubStep;
         }
@@ -924,12 +956,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             // - name: Setup MSBuild.exe
             //   uses: microsoft/setup-msbuild@v1.0.0
 
-            var gitHubStep = new GitHubActions.Step
+            return new GitHubActions.Step
             {
                 uses = "microsoft/setup-msbuild@v1.0.0"
             };
-
-            return gitHubStep;
         }
 
         private GitHubActions.Step CreateFunctionalTestingStep(AzurePipelines.Step step)
@@ -1045,7 +1075,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 uses = "actions/setup-java@v1",
                 with = new OrderedDictionary
                 {
-                    { "java-version", javaVersion}
+                    { "java-version", javaVersion }
                 }
             };
         }
@@ -1083,7 +1113,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             step.script = "./gradlew build";
 
-            return CreateScriptStep("", step);
+            var newStep = CreateScriptStep("", step);
+            newStep.DependsOn = GitHubActions.StepDependencies.JavaSetup | GitHubActions.StepDependencies.GradleSetup;
+
+            return newStep;
         }
 
         // TODO: Finish this Kubernetes Step
@@ -1221,7 +1254,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             string antCommand = "ant -noinput -buildfile " + buildFile;
             step.script = antCommand;
 
-            return CreateScriptStep("", step);
+            var newStep = CreateScriptStep("", step);
+            newStep.DependsOn = GitHubActions.StepDependencies.JavaSetup;
+
+            return newStep;
         }
 
         private GitHubActions.Step CreateMavenStep(AzurePipelines.Step step)
@@ -1247,7 +1283,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             string pomCommand = "mvn -B package --file " + pomFile;
             step.script = pomCommand;
 
-            return CreateScriptStep("", step);
+            var newStep = CreateScriptStep("", step);
+            newStep.DependsOn = GitHubActions.StepDependencies.JavaSetup;
+
+            return newStep;
         }
 
         private GitHubActions.Step CreateNPMStep(AzurePipelines.Step step)
@@ -1325,17 +1364,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             string version = GetStepInput(step, "versionSpec");
 
-            GitHubActions.Step gitHubStep = new GitHubActions.Step
+            return new GitHubActions.Step
             {
                 name = "Use Node.js " + version,
                 uses = "actions/setup-node@v1",
                 with = new OrderedDictionary
                 {
-                    { "node-version", version}
+                    { "node-version", version }
                 }
             };
-
-            return gitHubStep;
         }
 
         private GitHubActions.Step CreateUsePythonStep(AzurePipelines.Step step)
@@ -1355,18 +1392,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             string version = GetStepInput(step, "versionSpec");
 
-            GitHubActions.Step gitHubStep = new GitHubActions.Step
+            return new GitHubActions.Step
             {
                 name = "Setup Python " + version,
                 uses = "actions/setup-python@v1",
                 with = new OrderedDictionary
                 {
-                    { "python-version", version}
+                    { "python-version", version }
                 }
             };
-
-
-            return gitHubStep;
         }
 
         private GitHubActions.Step CreateUseRubyStep(AzurePipelines.Step step)
@@ -1386,18 +1420,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             string version = GetStepInput(step, "versionSpec");
 
-            GitHubActions.Step gitHubStep = new GitHubActions.Step
+            return new GitHubActions.Step
             {
                 name = "Setup Ruby " + version,
                 uses = "actions/setup-ruby@v1",
                 with = new OrderedDictionary
                 {
-                    { "ruby-version", version}
+                    { "ruby-version", version }
                 }
             };
-
-
-            return gitHubStep;
         }
 
         private GitHubActions.Step CreatePythonStep(AzurePipelines.Step step)
@@ -1416,9 +1447,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             string pythonCommand = "python " + scriptPath;
             step.script = pythonCommand;
 
-            GitHubActions.Step gitHubStep = CreateScriptStep("", step);
-
-            return gitHubStep;
+            return CreateScriptStep("", step);
         }
 
         private GitHubActions.Step CreatePublishTestResultsStep(AzurePipelines.Step step)
@@ -1475,44 +1504,41 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             string zipCommand = "zip -qq -r " + archiveFile + " " + rootFolderOrFile;
 
-            GitHubActions.Step gitHubStep = new GitHubActions.Step
+            return new GitHubActions.Step
             {
                 uses = "montudor/action-zip@v0.1.0",
                 with = new OrderedDictionary
                 {
-                    { "args", zipCommand}
+                    { "args", zipCommand }
                 },
                 step_message = "Note: This is a third party action: https://github.com/marketplace/actions/create-zip-file"
             };
-
-            return gitHubStep;
         }
 
         private GitHubActions.Step CreateAzureAppServiceManageStep(AzurePipelines.Step step)
         {
-            //https://docs.microsoft.com/en-us/azure/devops/pipelines/tasks/deploy/azure-app-service-manage?view=azure-devops
-            //coming from:
-            //- task: AzureAppServiceManage@0
-            //displayName: 'Swap Slots: web service'
-            //inputs:
-            //  azureSubscription: 'connection to Azure Portal'
-            //  WebAppName: $(WebServiceName)
-            //  ResourceGroupName: $(ResourceGroupName)
-            //  SourceSlot: 'staging'
+            // https://docs.microsoft.com/en-us/azure/devops/pipelines/tasks/deploy/azure-app-service-manage?view=azure-devops
+            // coming from:
+            // - task: AzureAppServiceManage@0
+            // displayName: 'Swap Slots: web service'
+            // inputs:
+            //   azureSubscription: 'connection to Azure Portal'
+            //   WebAppName: $(WebServiceName)
+            //   ResourceGroupName: $(ResourceGroupName)
+            //   SourceSlot: 'staging'
 
-            //Going to:
-            //- name: Swap web service staging slot to production
-            //  uses: Azure/cli@v1.0.0
-            //  with:
-            //    inlineScript: az webapp deployment slot swap --resource-group MyProjectRG --name featureflags-data-eu-service --slot staging --target-slot production
-
+            // Going to:
+            // - name: Swap web service staging slot to production
+            //   uses: Azure/cli@v1.0.0
+            //   with:
+            //     inlineScript: az webapp deployment slot swap --resource-group MyProjectRG --name featureflags-data-eu-service --slot staging --target-slot production
 
             string resourceGroup = GetStepInput(step, "resourcegroupname");
             string webAppName = GetStepInput(step, "webappname");
             string sourceSlot = GetStepInput(step, "sourceslot");
             string targetSlot = GetStepInput(step, "targetslot");
 
-            if (string.IsNullOrEmpty(targetSlot) == true)
+            if (string.IsNullOrEmpty(targetSlot))
             {
                 targetSlot = "production";
             }
@@ -1524,16 +1550,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 " --slot " + sourceSlot +
                 " --target-slot " + targetSlot + "";
 
-            GitHubActions.Step gitHubStep = new GitHubActions.Step
+            return new GitHubActions.Step
             {
                 uses = "Azure/cli@v1.0.0",
                 with = new OrderedDictionary
                 {
-                    { "inlineScript", script}
-                }
+                    { "inlineScript", script }
+                },
+                DependsOn = GitHubActions.StepDependencies.AzureLogin
             };
-
-            return gitHubStep;
         }
 
         private GitHubActions.Step CreateXamarinAndroidStep(AzurePipelines.Step step)
@@ -1563,9 +1588,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             "msbuild " + projectFile + " /verbosity:normal /t:Rebuild /p:Configuration=" + configuration;
             step.script = script;
 
-            GitHubActions.Step gitHubStep = CreateScriptStep("", step);
-
-            return gitHubStep;
+            return CreateScriptStep("", step);
         }
 
         private GitHubActions.Step CreateXamariniOSStep(AzurePipelines.Step step)
@@ -1595,9 +1618,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             "msbuild " + projectFile + " /verbosity:normal /t:Rebuild /p:Platform=iPhoneSimulator /p:Configuration=" + configuration;
             step.script = script;
 
-            GitHubActions.Step gitHubStep = CreateScriptStep("", step);
-
-            return gitHubStep;
+            return CreateScriptStep("", step);
         }
 
         private GitHubActions.Step CreatePublishBuildArtifactsStep(AzurePipelines.Step step)
@@ -1658,7 +1679,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 uses = "actions/upload-artifact@v2",
                 with = new OrderedDictionary
                 {
-                    {"path", path}
+                    { "path", path }
                 }
             };
 
@@ -1735,181 +1756,131 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private string GetStepInput(OrderedDictionary inputs, string name)
         {
-            string input = null;
-
             if (inputs != null && name != null)
             {
-                //Extract the input
-                foreach (DictionaryEntry item in inputs)
+                var matchingInputs = inputs
+                    .Cast<DictionaryEntry>()
+                    .Where(i => i.StringKey().ToLower() == name.ToLower());
+
+                if (matchingInputs.Any())
                 {
-                    //Make the name lowercase to help prevent conflicts later
-                    if ((item.StringKey()).ToLower() == name.ToLower())
-                    {
-                        input = item.StringValue();
-                        break;
-                    }
+                    return matchingInputs.First().StringValue();
                 }
             }
 
-            return input;
+            return null;
         }
 
         // Some pipelines need supporting steps as part of the processing. 
         // For example, if we are deploying to Azure, we need to add an Azure Login step
-        public GitHubActions.Step[] AddSupportingSteps(AzurePipelines.Step[] steps, VariablesProcessing variablesProcessing, bool addCheckoutStep = true)
+        public List<GitHubActions.Step> AddSupportingSteps(AzurePipelines.Step[] steps, VariablesProcessing variablesProcessing, OrderedDictionary variables, bool addCheckoutStep = true)
         {
-            StepsProcessing stepsProcessing = new StepsProcessing();
-
-            GitHubActions.Step[] newSteps = null;
+            var newSteps = new List<GitHubActions.Step>();
 
             if (steps != null)
             {
                 // Start by scanning all of the steps, to see if we need to insert additional tasks
-                int stepAdjustment = 0;
-                bool addJavaSetupStep = false;
-                bool addGradleSetupStep = false;
-                bool addAzureLoginStep = false;
-                bool addMSSetupStep = false;
-                string javaVersion = null;
-                OrderedDictionary checkoutInputs = null;
-
-                // Do we have checkout steps showing up as tasks in the job? If so, we'll remove these and map them to the checkout action
-                var checkoutSteps = steps.Where(s => s.task.ToUpper() == CheckoutStepId).ToList();
-
-                if (checkoutSteps.Any())
-                {
-                    // Remove these discrete checkout steps from our step array
-                    steps = steps.Except(checkoutSteps).ToArray();
-
-                    // If a checkout step shows up here as a discrete step, let's grab the params to use for our GH checkout below
-                    var mainCheckout = checkoutSteps.FirstOrDefault(c => GetStepInput(c, "repository") == "self");
-
-                    if (mainCheckout != null)
-                    {
-                        checkoutInputs = mainCheckout.inputs;
-                    }
-                    else if (checkoutSteps.All(c => GetStepInput(c, "repository") == "none"))
-                    {
-                        // If all/the only checkout steps use 'none', then we really dont want to checkout
-                        addCheckoutStep = false;
-                    }
-                }
+                VariableGroup keyVaultGroup = null;
 
                 // If the code needs a Checkout step, add it first
-                if (addCheckoutStep == true)
+                if (addCheckoutStep)
                 {
-                    stepAdjustment++; // we are inserting a step and need to start moving steps 1 place into the array
-                }
-
-                // Loop through the steps to see if we need other tasks inserted in for specific circumstances
-                foreach (AzurePipelines.Step step in steps)
-                {
-                    if (step.task != null)
+                    // Do we have checkout steps showing up as tasks in the job? If so, we'll remove these and map them to the checkout action
+                    var checkoutSteps = steps.Where(s => s.task.ToUpper() == CheckoutStepId).ToList();
+                    
+                    // TODO: handle checkout steps for other repos?
+                    if (checkoutSteps.Any())
                     {
-                        switch (step.task.ToUpper()) // Set to upper case to handle case sensitivity comparisons e.g. NPM hangles Npm, NPM, or npm. 
+                        // Remove these discrete checkout steps from our step array
+                        steps = steps.Except(checkoutSteps).ToArray();
+
+                        // If a checkout step shows up here as a discrete step, let's grab the params to use for our GH checkout below
+                        var mainCheckout = checkoutSteps.FirstOrDefault(c => GetStepInput(c, "repository") == "self");
+
+                        if (mainCheckout != null)
                         {
-                            // If we have an Java based step, we will need to add a Java setup step
-                            case "ANT@1":
-                            case "MAVEN@3":
-                                if (addJavaSetupStep == false)
-                                {
-                                    addJavaSetupStep = true;
-                                    stepAdjustment++;
-                                    javaVersion = stepsProcessing.GetStepInput(step, "jdkVersionOption");
-                                }
-                                break;
-
-                            // Needs a the Java step and an additional Gradle step
-                            case "GRADLE@2":
-
-                                if (addJavaSetupStep == false)
-                                {
-                                    addJavaSetupStep = true;
-                                    stepAdjustment++;
-                                    //Create the java step, as it doesn't exist
-                                    javaVersion = "1.8";
-                                }
-                                if (addGradleSetupStep == false)
-                                {
-                                    addGradleSetupStep = true;
-                                    stepAdjustment++;
-                                }
-                                break;
-
-                            // If we have an Azure step, we will need to add a Azure login step
-                            case "AZUREAPPSERVICEMANAGE@0":
-                            case "AZURERESOURCEGROUPDEPLOYMENT@2":
-                            case "AZURERMWEBAPPDEPLOYMENT@3":
-                                if (addAzureLoginStep == false)
-                                {
-                                    addAzureLoginStep = true;
-                                    stepAdjustment++;
-                                }
-                                break;
-
-                            case "VSBUILD@1":
-                                if (addMSSetupStep == false)
-                                {
-                                    addMSSetupStep = true;
-                                    stepAdjustment++;
-                                }
-                                break;
+                            newSteps.Add(CreateCheckoutStep(mainCheckout.inputs));
+                        }
+                        else if (checkoutSteps.Any(c => GetStepInput(c, "repository") != "none")) // in the case the repo found is 'none', we will not add the checkout step
+                        {
+                            newSteps.Add(CreateCheckoutStep());
                         }
                     }
-                }
-
-                // Re-size the newSteps array with adjustments as needed
-                newSteps = new GitHubActions.Step[steps.Length + stepAdjustment];
-
-                int adjustmentsUsed = 0;
-
-                // Add the steps array
-                if (addCheckoutStep == true)
-                {
-                    // Add the check out step to get the code
-                    newSteps[adjustmentsUsed] = stepsProcessing.CreateCheckoutStep(checkoutInputs);
-                    adjustmentsUsed++;
-                }
-
-                if (addJavaSetupStep == true)
-                {
-                    // Add the JavaSetup step to the code
-                    if (javaVersion != null)
+                    else // no discrete checkout steps found, we'll assume we need a single checkout step at the front of the Job
                     {
-                        newSteps[adjustmentsUsed] = stepsProcessing.CreateSetupJavaStep(javaVersion);
-                        adjustmentsUsed++;
+                        newSteps.Add(CreateCheckoutStep());
                     }
                 }
 
-                if (addGradleSetupStep == true)
+                // if the ADO pipeline has an Azure Key Vault-backed variable group, and it's used in the current set of vars, we'll add the steps needed to import the KV secrets
+                keyVaultGroup = variablesProcessing.FindVariableGroup(variables, VariableGroup.KeyVaultGroupType);
+
+                if (keyVaultGroup != null)
                 {
-                    // Add the Gradle setup step to the code
-                    newSteps[adjustmentsUsed] = stepsProcessing.CreateSetupGradleStep();
-                    adjustmentsUsed++;
+                    newSteps.Add(CreateAzureKeyVaultStep(keyVaultGroup));
                 }
 
-                if (addAzureLoginStep == true)
-                {
-                    // Add the Azure login step to the code
-                    newSteps[adjustmentsUsed] = stepsProcessing.CreateAzureLoginStep();
-                    adjustmentsUsed++;
-                }
+                var newStepOffset = newSteps.Count;
 
-                if (addMSSetupStep == true)
-                {
-                    // Add the Azure login step to the code
-                    newSteps[adjustmentsUsed] = stepsProcessing.CreateMSBuildSetupStep();
-                    //adjustmentsUsed++;
-                }
+                // Map new GH Actions steps from the ADO steps
+                newSteps.AddRange(steps.Select(s => ProcessStep(s, variablesProcessing)));
 
-                // Translate the other steps
-                for (int i = stepAdjustment; i < steps.Length + stepAdjustment; i++)
-                {
-                    newSteps[i] = stepsProcessing.ProcessStep(steps[i - stepAdjustment], variablesProcessing);
-                }
+                // find any steps that have dependencies and create those supporting steps here
+                var supportingSteps = processStepDependencies(newSteps, steps);
+
+                // order those in, supporting steps come first
+                newSteps.InsertRange(newStepOffset - 1, supportingSteps);
             }
 
             return newSteps;
+        }
+
+        public List<GitHubActions.Step> processStepDependencies(List<GitHubActions.Step> steps, Step[] oldSteps)
+        {
+            var currentDependencies = GitHubActions.StepDependencies.None;
+            var stepDependencies = new List<GitHubActions.Step>();
+            var offset = steps.Count - oldSteps.Length;
+
+            for (var i = 0; i < steps.Count; i++)
+            {
+                var step = steps[i];
+                var oldStep = i >= offset ? oldSteps[i - offset] : null; // skip steps that have been frontloaded into the new steps list and won't exist in old steps
+
+                if (checkDependency(step, ref currentDependencies, GitHubActions.StepDependencies.AzureLogin))
+                {
+                    stepDependencies.Add(CreateAzureLoginStep());
+                }
+
+                if (checkDependency(step, ref currentDependencies, GitHubActions.StepDependencies.JavaSetup))
+                {
+                    var javaVersion = GetStepInput(oldStep, "jdkVersionOption") ?? "1.8";
+                    stepDependencies.Add(CreateSetupJavaStep(javaVersion));
+                }
+
+                if (checkDependency(step, ref currentDependencies, GitHubActions.StepDependencies.GradleSetup))
+                {
+                    stepDependencies.Add(CreateSetupGradleStep());
+                }
+
+                if (checkDependency(step, ref currentDependencies, GitHubActions.StepDependencies.MSBuildSetup))
+                {
+                    stepDependencies.Add(CreateMSBuildSetupStep());
+                }
+            }
+
+            return stepDependencies;
+        }
+
+        bool checkDependency(GitHubActions.Step step, ref GitHubActions.StepDependencies currentDependencies, GitHubActions.StepDependencies newDependency)
+        {
+            if (step.IsDependentOn(newDependency) && (currentDependencies & newDependency) != newDependency)
+            {
+                currentDependencies = currentDependencies | newDependency;
+
+                return true;
+            }
+
+            return false;
         }
     }
 }
