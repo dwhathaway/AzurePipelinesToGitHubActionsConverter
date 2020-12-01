@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Specialized;
+using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.GitHubActions
@@ -30,7 +31,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.GitHubActions
             }
             set
             {
-                if (string.IsNullOrEmpty(value) == false)
+                if (!string.IsNullOrEmpty(value))
                 {
                     // Spaces on the beginning or end seem to be a problem for the YAML serialization, so we Trim() here
                     // Also, accidental carriage returns in scripts (such as a path including a \r) need to be accounted for

@@ -1,11 +1,13 @@
 ﻿using AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines;
 using AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization;
 using AzurePipelinesToGitHubActionsConverter.Core.Extensions;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 {
@@ -358,7 +360,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         private GitHubActions.Step CreateCopyFilesStep(AzurePipelines.Step step)
         {
             // Use PowerShell to copy files
-            step.script = "Copy '" + GetStepInput(step, "sourcefolder") + "/" + GetStepInput(step, "contents") + "' '" + GetStepInput(step, "targetfolder") + "'";
+            var contents = GetStepInput(step, "contents");
+            var paths = contents.Split(System.Environment.NewLine).TakeWhile(s => !string.IsNullOrWhiteSpace(s));
+
+            foreach (var path in paths)
+            {
+                step.script += System.Environment.NewLine + $"Copy '{ GetStepInput(step, "sourcefolder") }/{ path }' '{ GetStepInput(step, "targetfolder") }'" + System.Environment.NewLine;
+            }
 
             GitHubActions.Step gitHubStep = CreateScriptStep("powershell", step);
             return gitHubStep;
@@ -1781,34 +1789,38 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 // Start by scanning all of the steps, to see if we need to insert additional tasks
                 VariableGroup keyVaultGroup = null;
+                (GitHubActions.Step step, int index) checkoutStep = default;
 
                 // If the code needs a Checkout step, add it first
                 if (addCheckoutStep)
                 {
                     // Do we have checkout steps showing up as tasks in the job? If so, we'll remove these and map them to the checkout action
-                    var checkoutSteps = steps.Where(s => s.task.ToUpper() == CheckoutStepId).ToList();
+                    var checkoutSteps = steps
+                        .Select((step, index) => (step, index))
+                        .Where(cs => cs.step.task.ToUpper() == CheckoutStepId)
+                        .ToList();
                     
                     // TODO: handle checkout steps for other repos?
                     if (checkoutSteps.Any())
                     {
-                        // Remove these discrete checkout steps from our step array
-                        steps = steps.Except(checkoutSteps).ToArray();
-
                         // If a checkout step shows up here as a discrete step, let's grab the params to use for our GH checkout below
-                        var mainCheckout = checkoutSteps.FirstOrDefault(c => GetStepInput(c, "repository") == "self");
+                        var mainCheckout = checkoutSteps.FirstOrDefault(c => GetStepInput(c.step, "repository") == "self");
 
-                        if (mainCheckout != null)
+                        if (mainCheckout != default)
                         {
-                            newSteps.Add(CreateCheckoutStep(mainCheckout.inputs));
+                            checkoutStep = (CreateCheckoutStep(mainCheckout.step.inputs), mainCheckout.index);
                         }
-                        else if (checkoutSteps.Any(c => GetStepInput(c, "repository") != "none")) // in the case the repo found is 'none', we will not add the checkout step
+                        else if (checkoutSteps.Any(c => GetStepInput(c.step, "repository") != "none")) // in the case the repo found is 'none', we will not add the checkout step
                         {
-                            newSteps.Add(CreateCheckoutStep());
+                            checkoutStep = (CreateCheckoutStep(), 0);
                         }
+
+                        // Remove these discrete checkout steps from our step array
+                        steps = steps.Except(checkoutSteps.Select(cs => cs.step)).ToArray();
                     }
                     else // no discrete checkout steps found, we'll assume we need a single checkout step at the front of the Job
                     {
-                        newSteps.Add(CreateCheckoutStep());
+                        checkoutStep = (CreateCheckoutStep(), 0);
                     }
                 }
 
@@ -1824,6 +1836,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                 // Map new GH Actions steps from the ADO steps
                 newSteps.AddRange(steps.Select(s => ProcessStep(s, variablesProcessing)));
+                
+                // if we're adding a checkout action, insert it at the index we identified above
+                if (checkoutStep != default)
+                {
+                    newSteps.Insert(checkoutStep.index + newStepOffset, checkoutStep.step);
+                }
 
                 // find any steps that have dependencies and create those supporting steps here
                 var supportingSteps = processStepDependencies(newSteps, steps);
