@@ -1,13 +1,12 @@
 ﻿using AzurePipelinesToGitHubActionsConverter.Core.AzurePipelines;
 using AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization;
 using AzurePipelinesToGitHubActionsConverter.Core.Extensions;
-using System;
+using AzurePipelinesToGitHubActionsConverter.Core.GitHubActions;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 {
@@ -48,12 +47,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         gitHubStep = CreateAzureWebAppDeploymentStep(step);
                         break;
                     case "BASH@3":
-                        gitHubStep = CreateScriptStep("bash", step);
+                        gitHubStep = CreateScriptStep(step, ShellType.Bash);
                         break;
                     case "BATCHSCRIPT@1":
                     case "CMDLINE@1":
                     case "CMDLINE@2":
-                        gitHubStep = CreateScriptStep("cmd", step);
+                        gitHubStep = CreateScriptStep(step, ShellType.Cmd);
                         break;
                     case "COPYFILES@2":
                         gitHubStep = CreateCopyFilesStep(step);
@@ -95,7 +94,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         break;
                     case "POWERSHELL@1":
                     case "POWERSHELL@2":
-                        gitHubStep = CreateScriptStep("powershell", step);
+                        gitHubStep = CreateScriptStep(step, ShellType.PowerShell);
                         break;
                     case "PUBLISHPIPELINEARTIFACT@0":
                     case "PUBLISHPIPELINEARTIFACT@1":
@@ -133,7 +132,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         gitHubStep = CreateXamariniOSStep(step);
                         break;
                     default:
-                        gitHubStep = CreateScriptStep("powershell", step);
+                        gitHubStep = CreateScriptStep(step, ShellType.PowerShell);
                         string newYaml = GenericObjectSerialization.SerializeYaml<AzurePipelines.Step>(step);
                         string[] newYamlSplit = newYaml.Split(System.Environment.NewLine);
                         StringBuilder yamlBuilder = new StringBuilder();
@@ -164,15 +163,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
             else if (step.pwsh != null)
             {
-                gitHubStep = CreateScriptStep("pwsh", step);
+                gitHubStep = CreateScriptStep(step, ShellType.PowerShell);
             }
             else if (step.powershell != null)
             {
-                gitHubStep = CreateScriptStep("powershell", step);
+                gitHubStep = CreateScriptStep(step, ShellType.PowerShell);
             }
             else if (step.bash != null)
             {
-                gitHubStep = CreateScriptStep("bash", step);
+                gitHubStep = CreateScriptStep(step, ShellType.Bash);
             }
             else if (step.publish != null)
             {
@@ -368,7 +367,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 step.script += System.Environment.NewLine + $"Copy '{ GetStepInput(step, "sourcefolder") }/{ path }' '{ GetStepInput(step, "targetfolder") }'" + System.Environment.NewLine;
             }
 
-            GitHubActions.Step gitHubStep = CreateScriptStep("powershell", step);
+            GitHubActions.Step gitHubStep = CreateScriptStep(step, ShellType.PowerShell);
             return gitHubStep;
         }
 
@@ -483,7 +482,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
 
             step.script = dockerScript;
-            GitHubActions.Step gitHubStep = CreateScriptStep("", step);
+            GitHubActions.Step gitHubStep = CreateScriptStep(step);
 
             if (stepMessage != "")
             {
@@ -493,7 +492,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return gitHubStep;
         }
 
-        private GitHubActions.Step CreateScriptStep(string shellType, AzurePipelines.Step step)
+        private GitHubActions.Step CreateScriptStep(AzurePipelines.Step step, ShellType shellType = null)
         {
             string targetType = GetStepInput(step, "targetType");
             string arguments = GetStepInput(step, "arguments");
@@ -516,7 +515,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             var gitHubStep = new GitHubActions.Step
             {
                 run = step.script,
-                shell = shellType
+                shell = shellType?.Value
             };
 
             if (gitHubStep.run == null)
@@ -543,7 +542,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
-            if (gitHubStep.shell == "")
+            if (string.IsNullOrWhiteSpace(gitHubStep.shell))
             {
                 gitHubStep.shell = null;
             }
@@ -788,7 +787,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             string restoresolution = GetStepInput(step, "restoresolution");
 
-            var gitHubStep = CreateScriptStep("powershell", step);
+            var gitHubStep = CreateScriptStep(step, ShellType.PowerShell);
             gitHubStep.run = "nuget " + command + " " + restoresolution;
 
             //coming from:
@@ -951,7 +950,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             step.script = run;
 
             // To script
-            var gitHubStep = CreateScriptStep("", step);
+            var gitHubStep = CreateScriptStep(step);
             gitHubStep.run = run;
             gitHubStep.DependsOn = GitHubActions.StepDependencies.MSBuildSetup;
 
@@ -1072,7 +1071,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             // To PowerShell script
             step.script = run;
 
-            return CreateScriptStep("powershell", step);
+            return CreateScriptStep(step, ShellType.PowerShell);
         }
 
         public GitHubActions.Step CreateSetupJavaStep(string javaVersion)
@@ -1094,13 +1093,13 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             // - name: Grant execute permission for gradlew
             //   run: chmod +x gradlew
 
-            var step = new Step
+            var step = new AzurePipelines.Step
             {
                 name = "Grant execute permission for gradlew",
                 script = "chmod +x gradlew"
             };
 
-            return CreateScriptStep("", step);
+            return CreateScriptStep(step);
         }
 
         public GitHubActions.Step CreateGradleStep(AzurePipelines.Step step)
@@ -1121,7 +1120,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             step.script = "./gradlew build";
 
-            var newStep = CreateScriptStep("", step);
+            var newStep = CreateScriptStep(step);
             newStep.DependsOn = GitHubActions.StepDependencies.JavaSetup | GitHubActions.StepDependencies.GradleSetup;
 
             return newStep;
@@ -1262,7 +1261,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             string antCommand = "ant -noinput -buildfile " + buildFile;
             step.script = antCommand;
 
-            var newStep = CreateScriptStep("", step);
+            var newStep = CreateScriptStep(step);
             newStep.DependsOn = GitHubActions.StepDependencies.JavaSetup;
 
             return newStep;
@@ -1291,7 +1290,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             string pomCommand = "mvn -B package --file " + pomFile;
             step.script = pomCommand;
 
-            var newStep = CreateScriptStep("", step);
+            var newStep = CreateScriptStep(step);
             newStep.DependsOn = GitHubActions.StepDependencies.JavaSetup;
 
             return newStep;
@@ -1353,7 +1352,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 step.script += " " + workingDir;
             }
 
-            return CreateScriptStep("", step);
+            return CreateScriptStep(step);
         }
 
         private GitHubActions.Step CreateNodeToolStep(AzurePipelines.Step step)
@@ -1455,7 +1454,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             string pythonCommand = "python " + scriptPath;
             step.script = pythonCommand;
 
-            return CreateScriptStep("", step);
+            return CreateScriptStep(step);
         }
 
         private GitHubActions.Step CreatePublishTestResultsStep(AzurePipelines.Step step)
@@ -1483,7 +1482,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             string command = @"echo ""This task equivalent does not yet exist in GitHub Actions""";
             step.script = command;
 
-            GitHubActions.Step gitHubStep = CreateScriptStep("", step);
+            GitHubActions.Step gitHubStep = CreateScriptStep(step);
 
             gitHubStep.step_message = "PublishTestResults@2 is a Azure DevOps specific task. There is no equivalent in GitHub Actions until there is a testing summary tab. See: https://github.community/t/publishing-test-results/16215";
 
@@ -1596,7 +1595,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             "msbuild " + projectFile + " /verbosity:normal /t:Rebuild /p:Configuration=" + configuration;
             step.script = script;
 
-            return CreateScriptStep("", step);
+            return CreateScriptStep(step);
         }
 
         private GitHubActions.Step CreateXamariniOSStep(AzurePipelines.Step step)
@@ -1626,7 +1625,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             "msbuild " + projectFile + " /verbosity:normal /t:Rebuild /p:Platform=iPhoneSimulator /p:Configuration=" + configuration;
             step.script = script;
 
-            return CreateScriptStep("", step);
+            return CreateScriptStep(step);
         }
 
         private GitHubActions.Step CreatePublishBuildArtifactsStep(AzurePipelines.Step step)
@@ -1853,7 +1852,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return newSteps;
         }
 
-        public List<GitHubActions.Step> processStepDependencies(List<GitHubActions.Step> steps, Step[] oldSteps)
+        public List<GitHubActions.Step> processStepDependencies(List<GitHubActions.Step> steps, AzurePipelines.Step[] oldSteps)
         {
             var currentDependencies = GitHubActions.StepDependencies.None;
             var stepDependencies = new List<GitHubActions.Step>();
