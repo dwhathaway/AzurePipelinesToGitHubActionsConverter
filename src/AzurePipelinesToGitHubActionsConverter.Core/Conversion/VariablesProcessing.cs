@@ -419,11 +419,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         {
                             var varName = varMatched.Groups[1].Value;
 
-                            // is this var defined at the job level?
+                            // is this var an env var that needs to be populated? GH Actions will not substitute env vars within the env dict
                             if (envVars.Contains(varName))
                             {
-                                // strip any prefix & wrapper, just refer to the var via $var - replace the full match with $var
-                                varValue = varValue.Replace(varMatched.Value, $"${ varName }");
+                                // sub in the actul value of this env var since Actions does not allow complex/compound env vars
+                                var value = envVarTable[varName].ToString();
+                                varValue = varValue.Replace(varMatched.Value, value);
                             }
                         }
 
