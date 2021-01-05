@@ -215,7 +215,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                         try
                         {
                             // Run the converter
-                            Conversion conversion = new Conversion(variableGroups, opts.AddWorkflowTrigger);
+                            Conversion conversion = new Conversion(variableGroups, opts.AddWorkflowTrigger, opts.VariableCompatMode);
 
                             var result = conversion.ConvertAzurePipelineToGitHubAction(pipelineYaml);
 

@@ -38,5 +38,8 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp.Commands.Options
 
         [Option('f', "addWorkflowTrigger", Required = false, Default = false, HelpText = "Whether or not to add a workflow_dispatch trigger to the resulting GitHub Actions workflow")]
         public bool? AddWorkflowTrigger { get; set; }
+
+        [Option('v', "variableCompatMode", Required = false, Default = false, HelpText = "Whether or not to add GitHub Actions env variable mappings to legacy Azure DevOps system variables")]
+        public bool? VariableCompatMode { get; set; }
     }
 }

@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 {
@@ -16,12 +15,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         private string _matrixVariableName;
         private readonly bool _verbose;
         private readonly bool _addWorkflowTrigger;
+        private readonly bool _variableCompatMode;
         private List<VariableGroup> _variableGroups;
 
-        public Conversion(List<VariableGroup> variableGroups = null, bool? addWorkflowTrigger = null, bool verbose = true)
+        public Conversion(List<VariableGroup> variableGroups = null, bool? addWorkflowTrigger = null, bool? variableCompatMode = null, bool verbose = true)
         {
             _variableGroups = variableGroups;
             _addWorkflowTrigger = addWorkflowTrigger ?? false;
+            _variableCompatMode = variableCompatMode ?? false;
             _verbose = verbose;
         }
 
@@ -375,7 +376,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
 
                 // find all env vars at each tier of the GH Actions tree and pre-process these to handle syntax nuances, secrets, Key Vault var groups, etc.
-                vp.ProcessEnvVars(gitHubActions);
+                vp.ProcessEnvVars(gitHubActions, _variableCompatMode);
 
                 // we'll check each job output to see if we need to make any Step adjustments after the fact
                 foreach (var job in gitHubActions.jobs.Values)

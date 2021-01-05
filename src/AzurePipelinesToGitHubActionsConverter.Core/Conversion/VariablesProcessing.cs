@@ -24,16 +24,19 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private Dictionary<string, string> SystemVarMapping = new Dictionary<string, string>()
         {
-            { "Agent.WorkFolder", "github.workspace" }, // runner.workspace will not validate in Job-level env
+            { "Agent.WorkFolder", "github.workspace" }, // runner.workspace will not validate in Workflow or Job-level env
+            { "Agent.BuildDirectory", "runner.workspace" },
+            { "Pipeline.Workspace", "runner.workspace" },
             { "Build.BuildId", "github.run_id" },
             { "Build.BuildNumber", "github.run_number" },
             { "Build.DefinitionName", "github.workflow" },
             { "Build.SourcesDirectory", "github.workspace" }, // workspace is shared work folder, may need to create subfolder(s)
             { "Build.ArtifactStagingDirectory", "github.workspace" }, // workspace is shared work folder, may need to create subfolder(s)
+            { "Build.StagingDirectory", "github.workspace" }, // workspace is shared work folder, may need to create subfolder(s)
             { "Build.SourceBranch", "github.ref" },
             { "Build.SourceBranchName", "github.ref" }, // not exact mapping "main" vs "refs/heads/main"
+            { "Build.SourceVersion", "github.sha" },
             { "Build.RepositoryName", "github.repository" }, // not exact mapping [repo name] vs [account/org name]/[repo name]
-            { "Pipeline.Workspace", "runner.workspace" }, // should this be mapped to github.workspace?
             { "System.StageAttempt", "github.run_number" },
             { "rev:r", "github.run_number" }
         };
@@ -313,7 +316,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         }
 
         // Search GitHub object for all environment variables
-        public void ProcessEnvVars(GitHubActionsRoot gitHubActions)
+        public void ProcessEnvVars(GitHubActionsRoot gitHubActions, bool variableCompatMode = false)
         {
             DictionaryEntry[] rawEnvValues = null;
 
@@ -326,6 +329,26 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 gitHubActions.env.CopyTo(rawEnvValues, 0);
 
                 processVarDict(gitHubActions, gitHubActions.env);
+
+                // do we need to output legacy ADO system vars to ease pipeline conversion?
+                if (variableCompatMode)
+                {
+                    foreach (var mapping in SystemVarMapping)
+                    {
+                        if (!mapping.Value.StartsWith("runner")) // runner context not available at workflow level (?)
+                        {
+                            // output both context-style and ENV style vars, i.e. Build.SourceBranch and BUILD_SOURCEBRANCH
+                            gitHubActions.env.Add(mapping.Key, $"${{{{ { mapping.Value } }}}}");
+
+                            if (mapping.Key.Contains('.'))
+                            {
+                                gitHubActions.env.Add(mapping.Key.ToUpper().Replace('.', '_'), $"${{{{ { mapping.Value } }}}}");
+                            }
+                        }
+                    }
+
+                    gitHubActions.messages.Add("Note: VariableCompatMode detected; A mapping of system vars between Azure DevOps and GitHub Actions has been added to env");
+                }
             }
 
             if (gitHubActions.jobs != null)
@@ -574,8 +597,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             // Not prefixed, convert the syntax
                             yaml = yaml.Replace(match.Value, $"${{{{ env.{ varName } }}}}");
                         }
-                        else if (varParts[0] != "secrets") // possibly have an unmapped system var here that we should notify was not converted
+                        else if (varParts[0] != "secrets" && varParts[0] != "github" && varParts[0] != "runner")
                         {
+                            // possibly have an unmapped system var here that we should notify was not converted
                             messages?.AddIfUnique($"Variable conversions completed but unable to convert { varName }");
                         }
                     }
