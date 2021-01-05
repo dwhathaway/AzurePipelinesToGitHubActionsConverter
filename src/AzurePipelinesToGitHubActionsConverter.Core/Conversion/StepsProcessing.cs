@@ -361,14 +361,17 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             // Use PowerShell to copy files
             var contents = GetStepInput(step, "contents");
             var paths = contents.Split(System.Environment.NewLine).TakeWhile(s => !string.IsNullOrWhiteSpace(s));
+            var targetFolder = GetStepInput(step, "targetfolder");
+            
+            // ensure folder exists - this tracks with CopyFiles@2 behavior
+            step.script += System.Environment.NewLine + $"md -Force { targetFolder }" + System.Environment.NewLine;
 
             foreach (var path in paths)
             {
-                step.script += System.Environment.NewLine + $"Copy '{ GetStepInput(step, "sourcefolder") }/{ path }' '{ GetStepInput(step, "targetfolder") }'" + System.Environment.NewLine;
+                step.script += System.Environment.NewLine + $"Copy '{ GetStepInput(step, "sourcefolder") }/{ path }' '{ targetFolder }'" + System.Environment.NewLine;
             }
 
-            GitHubActions.Step gitHubStep = CreateScriptStep(step, ShellType.PowerShell);
-            return gitHubStep;
+            return CreateScriptStep(step, ShellType.PowerShell);
         }
 
         private GitHubActions.Step CreateDockerStep(AzurePipelines.Step step)
@@ -539,6 +542,23 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         string runValue = GetStepInput(step, "script") ?? GetStepInput(step, "inlinescript");
                         gitHubStep.run = runValue;
                     }
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(gitHubStep.run))
+            {
+                // Spaces on the beginning or end seem to be a problem for the YAML serialization, so we Trim() here
+                // Also, accidental carriage returns in scripts (such as a path including a \r) need to be accounted for
+                // If this script step includes escaped carriage returns (\\r), switch these to "\\\\r" so that we don't accidentally improperly match these as CRs; we'll fix these up later when we serialize
+                gitHubStep.run = gitHubStep.run.Replace("\\r", "\\\\r").Trim();
+
+                var lines = gitHubStep.run.Split(System.Environment.NewLine);
+
+                var emptyLines = lines.Where(l => string.IsNullOrWhiteSpace(l));
+
+                if (emptyLines.Any())
+                {
+                    gitHubStep.run = string.Join(System.Environment.NewLine, lines.Except(emptyLines));
                 }
             }
 

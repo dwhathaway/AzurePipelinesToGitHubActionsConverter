@@ -19,15 +19,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.GitHubActions
             }
             set
             {
-                if (!string.IsNullOrEmpty(value))
+                if (!string.IsNullOrWhiteSpace(value))
                 {
-                    // Spaces on the beginning or end seem to be a problem for the YAML serialization, so we Trim() here
-                    // Also, accidental carriage returns in scripts (such as a path including a \r) need to be accounted for
-                    // If this script step includes escaped carriage returns (\\r), switch these to "\\\\r" so that we don't accidentally improperly match these as CRs; we'll fix these up later when we serialize
-                    value = value.Replace("\\r", "\\\\r").Trim();
+                    _run = value;
                 }
-
-                _run = value;
             }
         }
 
