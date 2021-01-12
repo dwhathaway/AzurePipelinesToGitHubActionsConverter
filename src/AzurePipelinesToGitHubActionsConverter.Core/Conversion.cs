@@ -385,9 +385,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     GitHubActionsSerialization.SerializeJob(job, vp);
 
                     // see if any KV secret vars were consumed in this Job (tracked during serialization)
-                    if (!vp.AnyKeyVaultSecretsConsumed())
+                    if (!vp.AnyKeyVaultSecretsConsumed() && vp.KeyVaultGroup != null)
                     {
                         var kvStep = job.steps.SingleOrDefault(s => s.id == vp.KeyVaultGroup.name);
+                        
 
                         if (kvStep != null)
                         {
