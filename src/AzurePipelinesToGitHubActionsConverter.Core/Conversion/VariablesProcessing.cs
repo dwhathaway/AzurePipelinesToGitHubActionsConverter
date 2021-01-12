@@ -22,23 +22,38 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         private List<string> usedSecrets = new List<string>();
         public VariableGroup KeyVaultGroup;
 
-        private Dictionary<string, string> SystemVarMapping = new Dictionary<string, string>()
+        private class SystemVariableMapping
         {
-            { "Agent.WorkFolder", "github.workspace" }, // runner.workspace will not validate in Workflow or Job-level env
-            { "Agent.BuildDirectory", "runner.workspace" },
-            { "Pipeline.Workspace", "runner.workspace" },
-            { "Build.BuildId", "github.run_id" },
-            { "Build.BuildNumber", "github.run_number" },
-            { "Build.DefinitionName", "github.workflow" },
-            { "Build.SourcesDirectory", "github.workspace" }, // workspace is shared work folder, may need to create subfolder(s)
-            { "Build.ArtifactStagingDirectory", "github.workspace" }, // workspace is shared work folder, may need to create subfolder(s)
-            { "Build.StagingDirectory", "github.workspace" }, // workspace is shared work folder, may need to create subfolder(s)
-            { "Build.SourceBranch", "github.ref" },
-            { "Build.SourceBranchName", "github.ref" }, // not exact mapping "main" vs "refs/heads/main"
-            { "Build.SourceVersion", "github.sha" },
-            { "Build.RepositoryName", "github.repository" }, // not exact mapping [repo name] vs [account/org name]/[repo name]
-            { "System.StageAttempt", "github.run_number" },
-            { "rev:r", "github.run_number" }
+            public string ADOVar { get; set; }
+            public string ActionsVar { get; set; }
+            public string Format { get; set; }
+
+            public static SystemVariableMapping Define(string adoVar, string actionsVar, string format = null)
+            {
+                return new SystemVariableMapping { ADOVar = adoVar, ActionsVar = actionsVar, Format = format };
+            }
+        }
+
+        private List<SystemVariableMapping> SystemVarMapping = new List<SystemVariableMapping>()
+        {
+            SystemVariableMapping.Define("Agent.WorkFolder", "github.workspace"), // runner.workspace will not validate in Workflow or Job-level env
+            SystemVariableMapping.Define("Agent.BuildDirectory", "runner.workspace"),
+            SystemVariableMapping.Define("Pipeline.Workspace", "runner.workspace"),
+            SystemVariableMapping.Define("Build.BuildId", "github.run_id"),
+            SystemVariableMapping.Define("Build.BuildNumber", "github.run_number"),
+            SystemVariableMapping.Define("Build.DefinitionName", "github.workflow"),
+            SystemVariableMapping.Define("Build.Reason", "github.event_name"),
+            SystemVariableMapping.Define("Build.SourcesDirectory", "github.workspace"), // workspace is shared work folder, may need to create subfolder(s)
+            SystemVariableMapping.Define("Build.ArtifactStagingDirectory", "github.workspace"), // workspace is shared work folder, may need to create subfolder(s)
+            SystemVariableMapping.Define("Build.StagingDirectory", "github.workspace"), // workspace is shared work folder, may need to create subfolder(s)
+            SystemVariableMapping.Define("Build.SourceBranch", "github.ref"),
+            SystemVariableMapping.Define("Build.SourceBranchName", "github.ref"), // not exact mapping "main" vs "refs/heads/main"
+            SystemVariableMapping.Define("Build.SourceVersion", "github.sha"),
+            SystemVariableMapping.Define("Build.RepositoryName", "github.repository"), // not exact mapping [repo name] vs [account/org name]/[repo name]
+            SystemVariableMapping.Define("System.ArtifactsDirectory", "github.workspace"), // workspace is shared work folder, may need to create subfolder(s)
+            SystemVariableMapping.Define("System.DefaultWorkingDirectory", "github.workspace"), // workspace is shared work folder, may need to create subfolder(s)
+            SystemVariableMapping.Define("System.StageAttempt", "github.run_number"),
+            SystemVariableMapping.Define("rev:r", "github.run_number"),
         };
 
         public VariablesProcessing(List<VariableGroup> variableGroups = null, bool verbose = true)
@@ -50,12 +65,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         public VariableGroup FindVariableGroup(OrderedDictionary variables, string type = null)
         {
-            return FindVariableGroup(variables.Cast<DictionaryEntry>(), type);
+            return FindVariableGroup(variables?.Cast<DictionaryEntry>(), type);
         }
 
         public VariableGroup FindVariableGroup(IEnumerable<DictionaryEntry> variables, string type = null)
         {
-            var varGroupName = variables
+            var varGroupName = variables?
                 .Where(de => de.StringKey() == GroupKey)
                 .Select(de => de.StringValue()).FirstOrDefault();
 
@@ -335,14 +350,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 {
                     foreach (var mapping in SystemVarMapping)
                     {
-                        if (!mapping.Value.StartsWith("runner")) // runner context not available at workflow level (?)
+                        if (!mapping.ActionsVar.StartsWith("runner")) // runner context not available at workflow level (?)
                         {
                             // output both context-style and ENV style vars, i.e. Build.SourceBranch and BUILD_SOURCEBRANCH
-                            gitHubActions.env.Add(mapping.Key, $"${{{{ { mapping.Value } }}}}");
+                            gitHubActions.env.Add(mapping.ADOVar, $"${{{{ { mapping.ActionsVar } }}}}");
 
-                            if (mapping.Key.Contains('.'))
+                            if (mapping.ADOVar.Contains('.'))
                             {
-                                gitHubActions.env.Add(mapping.Key.ToUpper().Replace('.', '_'), $"${{{{ { mapping.Value } }}}}");
+                                gitHubActions.env.Add(mapping.ADOVar.ToUpper().Replace('.', '_'), $"${{{{ { mapping.ActionsVar } }}}}");
                             }
                         }
                     }
@@ -358,7 +373,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     processVarDict(gitHubActions, job.Value.env, rawEnvValues);
 
                     // no vars left? Remove the table
-                    if (job.Value.env.Count == 0)
+                    if (job.Value.env?.Count == 0)
                     {
                         job.Value.env = null;
                     }
@@ -581,11 +596,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 else
                 {
                     // see if this matches a system var we know how to replace
-                    var systemVar = SystemVarMapping.FirstOrDefault(v => v.Key.ToLower() == varName.ToLower());
+                    var systemVar = SystemVarMapping.FirstOrDefault(v => v.ADOVar.ToLower() == varName.ToLower());
 
-                    if (systemVar.Value != null)
+                    if (systemVar?.ActionsVar != null)
                     {
-                        yaml = yaml.Replace(match.Value, $"${{{{ { systemVar.Value } }}}}");
+                        yaml = yaml.Replace(match.Value, $"${{{{ { systemVar.ActionsVar } }}}}");
                     }
                     else // otherwise, only convert the usage syntax to env if it doesn't look like a system var or in antoher context already
                     {
@@ -607,7 +622,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
 
             // if we've converted to GH secrets syntax, let's remove any secrets that were not used
-            if (KeyVaultGroup.name == null)
+            if (KeyVaultGroup?.name == null)
             {
                 // do we have unused secrets that were pulled in?
                 foreach (var secret in secrets.Except(usedSecrets))
