@@ -560,6 +560,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 {
                     gitHubStep.run = string.Join(System.Environment.NewLine, lines.Except(emptyLines));
                 }
+
+                if (string.IsNullOrWhiteSpace(gitHubStep.run.Last().ToString())) // yaml.net can choose an alternate serialization style if the last char is whitespace
+                {
+                    gitHubStep.run = gitHubStep.run.Remove(gitHubStep.run.Length - 1);
+                }
             }
 
             if (string.IsNullOrWhiteSpace(gitHubStep.shell))
@@ -1865,8 +1870,18 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 // find any steps that have dependencies and create those supporting steps here
                 var supportingSteps = processStepDependencies(newSteps, steps);
 
-                // order those in, supporting steps come first
-                newSteps.InsertRange(newStepOffset - 1, supportingSteps);
+                if (supportingSteps?.Count > 0)
+                {
+                    try
+                    {
+                        // order those in, supporting steps come first
+                        newSteps.InsertRange(newStepOffset - 1, supportingSteps);
+                    }
+                    catch (System.Exception ex)
+                    {
+                        int i = 0;
+                    }
+                }
             }
 
             return newSteps;
