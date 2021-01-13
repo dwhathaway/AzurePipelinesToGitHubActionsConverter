@@ -332,43 +332,52 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreateDownloadPipelineArtifact(AzurePipelines.Step step)
         {
-           string artifactName = GetStepInput(step, "artifact");
+            // From: 
+            // - task: DownloadPipelineArtifact@2
+            //   inputs:
+            //     #source: 'current' # Options: current, specific
+            //     #project: # Required when source == Specific
+            //     #pipeline: # Required when source == Specific
+            //     #preferTriggeringPipeline: false # Optional
+            //     #runVersion: 'latest' # Required when source == Specific# Options: latest, latestFromBranch, specific
+            //     #runBranch: 'refs/heads/master' # Required when source == Specific && RunVersion == LatestFromBranch
+            //     #runId: # Required when source == Specific && RunVersion == Specific
+            //     #tags: # Optional
+            //     #artifact: # Optional
+            //     #patterns: '**' # Optional
+            //     #path: '$(Pipeline.Workspace)' 
 
-            //buildtype: current#  
-            //artifactname: WebDeploy#  
-            //targetpath: ${{ env.Pipeline.Workspace }}
+            // To:
+            // - name: Download serviceapp artifact
+            //   uses: actions/download-artifact@v2
+            //   with:
+            //     name: serviceapp
 
-           var gitHubStep = new GitHubActions.Step
-           {
-               uses = "actions/download-artifact@v2",
-               with = new OrderedDictionary
-               {
-                   { "name", artifactName }
-               }
-           };
+            // No real analogue for DownloadPipelineArtifact@2 when using 'specific' mode, but we'll map this to a simple DownloadArtifact action
 
-           // From: 
-           // - task: DownloadPipelineArtifact@2
-           //   inputs:
-           //     #source: 'current' # Options: current, specific
-           //     #project: # Required when source == Specific
-           //     #pipeline: # Required when source == Specific
-           //     #preferTriggeringPipeline: false # Optional
-           //     #runVersion: 'latest' # Required when source == Specific# Options: latest, latestFromBranch, specific
-           //     #runBranch: 'refs/heads/master' # Required when source == Specific && RunVersion == LatestFromBranch
-           //     #runId: # Required when source == Specific && RunVersion == Specific
-           //     #tags: # Optional
-           //     #artifact: # Optional
-           //     #patterns: '**' # Optional
-           //     #path: '$(Pipeline.Workspace)' 
+            var gitHubStep = new GitHubActions.Step
+            {
+                uses = "actions/download-artifact@v2",
+                with = new OrderedDictionary()
+            };
 
-           // To:
-           // - name: Download serviceapp artifact
-           //   uses: actions/download-artifact@v2
-           //   with:
-           //     name: serviceapp
+            var artifactName = GetStepInput(step, "artifact");
 
-           return gitHubStep;
+            // if artifactname is specified, we're downloading a single artifact; if not, then it will download all artifacts
+            if (!string.IsNullOrEmpty(artifactName))
+            {
+                gitHubStep.with.Add("name", artifactName);
+            }
+
+            var path = GetStepInput(step, "path");
+
+            // if the downloadPath is specified, it will download to that parh, otherwise it will download to the current working directory
+            if (!string.IsNullOrEmpty(path))
+            {
+                gitHubStep.with.Add("path", path);
+            }
+
+            return gitHubStep;
         }
 
         private GitHubActions.Step CreateCopyFilesStep(AzurePipelines.Step step)
