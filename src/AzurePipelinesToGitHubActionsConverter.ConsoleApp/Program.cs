@@ -1,5 +1,4 @@
-﻿using AzurePipelinesToGitHubActionsConverter.Core;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Dynamic;
@@ -24,7 +23,7 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
 
         static readonly ISerializer  _yamlSerializer = new Serializer();
 
-        static List<string> _missingConverters = new List<string>();
+        static Dictionary<string, Dictionary<string, int>> _missingPipelineConverters = new Dictionary<string, Dictionary<string, int>>();
 
         static int Main(string[] args) {
             return Parser.Default.ParseArguments<ConvertFileOptions, ExtractAndConvertOptions>(args)
@@ -85,9 +84,13 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                     {
                         Console.WriteLine(comment);
 
-                        if (comment.Contains("#Note: Error! This step does not have a conversion path yet")
-                            && !_missingConverters.Contains(comment))
-                            _missingConverters.Add(comment);
+                        if (comment.Contains("#Note: Error! This step does not have a conversion path yet"))
+                        {
+                            _missingPipelineConverters.TryGetValue(comment, out var pipelineCount);
+                            pipelineCount = _missingPipelineConverters[comment] = pipelineCount ?? new Dictionary<string, int>();
+                            pipelineCount.TryGetValue(inputFileInfo.Name, out var count);
+                            pipelineCount[inputFileInfo.Name] = ++count;
+                        }
                     });
 
                     Console.ResetColor();
@@ -115,10 +118,16 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                 retVal = -1;
             }
 
-            if (_missingConverters.Count > 0)
+            if (_missingPipelineConverters.Count > 0)
             {
                 Console.WriteLine("The following converters required by these pipelines are:");
-                _missingConverters.ForEach((missingConverter) => Console.Write(missingConverter));
+
+                foreach (var missingConverter in _missingPipelineConverters)
+                {
+                    var totalUsedCount = missingConverter.Value.Sum(v => v.Value);
+                    Console.WriteLine($"Missing in {missingConverter.Value.Count} of the pipelines processed, with a total use count of {totalUsedCount}:");
+                    Console.WriteLine(missingConverter.Key);
+                }
             }
 
             return retVal;
@@ -229,9 +238,16 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                                 {
                                     Console.WriteLine(comment);
 
-                                    if (comment.Contains("#Note: Error! This step does not have a conversion path yet")
-                                       && !_missingConverters.Contains(comment))
-                                        _missingConverters.Add(comment);
+                                    if (comment.Contains("#Note: Error! This step does not have a conversion path yet"))
+                                    {
+                                        var pipelineName = yamlPipeline["name"].ToString();
+
+                                        _missingPipelineConverters.TryGetValue(comment, out var pipelineCount);
+                                        pipelineCount = _missingPipelineConverters[comment] = pipelineCount ?? new Dictionary<string, int>();
+
+                                        pipelineCount.TryGetValue(pipelineName, out var count);
+                                        pipelineCount[pipelineName] = ++count;
+                                    }
                                 });
 
                                 Console.ResetColor();
@@ -267,10 +283,22 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                 continuationToken = response.ContainsKey("continuationToken") ? response["continuationToken"].ToString() : string.Empty;
             } while (!string.IsNullOrWhiteSpace(continuationToken));
 
-            if (_missingConverters.Count > 0)
+            if (_missingPipelineConverters.Count > 0)
             {
                 Console.WriteLine("The following converters required by these pipelines are:");
-                _missingConverters.ForEach((missingConverter) => Console.WriteLine(missingConverter));
+
+                foreach (var missingConverter in _missingPipelineConverters)
+                {
+                    var totalUsedCount = missingConverter.Value.Sum(v => v.Value);
+                    Console.WriteLine($"Missing in {missingConverter.Value.Count} of the pipelines processed, with a total usage count of {totalUsedCount}:");
+                    Console.WriteLine(missingConverter.Key);
+                    Console.WriteLine("Pipelines:");
+
+                    foreach (var pipelineUse in missingConverter.Value)
+                    {
+                        Console.WriteLine($"{pipelineUse.Key}: Used {pipelineUse.Value} times");
+                    }
+                }
             }
 
             return retVal;

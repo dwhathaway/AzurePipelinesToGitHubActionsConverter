@@ -388,7 +388,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     if (!vp.AnyKeyVaultSecretsConsumed() && vp.KeyVaultGroup != null)
                     {
                         var kvStep = job.steps.SingleOrDefault(s => s.id == vp.KeyVaultGroup.name);
-                        
 
                         if (kvStep != null)
                         {
