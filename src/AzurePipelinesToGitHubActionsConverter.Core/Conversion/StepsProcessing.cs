@@ -68,9 +68,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     case "DOWNLOADBUILDARTIFACTS@0":
                         gitHubStep = CreateDownloadBuildArtifacts(step);
                         break;
-                    //case "DOWNLOADPIPELINEARTIFACTS@2":
-                    //    gitHubStep = CreateDownloadPipelineArtifacts(step);
-                    //    break;
+                    case "DOWNLOADPIPELINEARTIFACT@2":
+                       gitHubStep = CreateDownloadPipelineArtifact(step);
+                       break;
                     case "GRADLE@2":
                         gitHubStep = CreateGradleStep(step);
                         break;
@@ -287,16 +287,29 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreateDownloadBuildArtifacts(AzurePipelines.Step step)
         {
-            string artifactName = GetStepInput(step, "artifactname");
-
             var gitHubStep = new GitHubActions.Step
             {
-                uses = "actions/download-artifact@v1.0.0",
-                with = new OrderedDictionary
-                {
-                    { "name", artifactName }
-                }
+                uses = "actions/download-artifact@v2",
+                with = new OrderedDictionary()
             };
+
+            var artifactName = GetStepInput(step, "artifactname");
+
+            // if artifactname is specified, we're downloading a single artifact; if not, then it will download all artifacts
+            if (!string.IsNullOrEmpty(artifactName))
+            {
+                gitHubStep.with.Add("name", artifactName);
+            }
+
+            var path = GetStepInput(step, "downloadPath");
+
+            // if the downloadPath is specified, it will download to that parh, otherwise it will download to the current working directory
+            if (!string.IsNullOrEmpty(path))
+            {
+                gitHubStep.with.Add("path", path);
+            }
+
+            // https://github.com/actions/download-artifact
 
             // From: 
             // - task: DownloadBuildArtifacts@0
@@ -309,52 +322,54 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             // To:
             // - name: Download serviceapp artifact
-            //   uses: actions/download-artifact@v1.0.0
+            //   uses: actions/download-artifact@v2
             //   with:
             //     name: serviceapp
+            //     path: /my/path
+
             return gitHubStep;
         }
 
-        //private GitHubActions.Step CreateDownloadPipelineArtifacts(AzurePipelines.Step step)
-        //{
-        //    string artifactName = GetStepInput(step, "artifact");
+        private GitHubActions.Step CreateDownloadPipelineArtifact(AzurePipelines.Step step)
+        {
+           string artifactName = GetStepInput(step, "artifact");
 
-        ////buildtype: current#  
-        ////artifactname: WebDeploy#  
-        ////targetpath: ${{ env.Pipeline.Workspace }}
+            //buildtype: current#  
+            //artifactname: WebDeploy#  
+            //targetpath: ${{ env.Pipeline.Workspace }}
 
+           var gitHubStep = new GitHubActions.Step
+           {
+               uses = "actions/download-artifact@v2",
+               with = new OrderedDictionary
+               {
+                   { "name", artifactName }
+               }
+           };
 
-        //    GitHubActions.Step gitHubStep = new GitHubActions.Step
-        //    {
-        //        uses = "actions/download-artifact@v1.0.0",
-        //        with = new Dictionary<string, string>
-        //        {
-        //            { "name", artifactName }
-        //        }
-        //    };
+           // From: 
+           // - task: DownloadPipelineArtifact@2
+           //   inputs:
+           //     #source: 'current' # Options: current, specific
+           //     #project: # Required when source == Specific
+           //     #pipeline: # Required when source == Specific
+           //     #preferTriggeringPipeline: false # Optional
+           //     #runVersion: 'latest' # Required when source == Specific# Options: latest, latestFromBranch, specific
+           //     #runBranch: 'refs/heads/master' # Required when source == Specific && RunVersion == LatestFromBranch
+           //     #runId: # Required when source == Specific && RunVersion == Specific
+           //     #tags: # Optional
+           //     #artifact: # Optional
+           //     #patterns: '**' # Optional
+           //     #path: '$(Pipeline.Workspace)' 
 
-        //    //From: 
-        //    //- task: DownloadPipelineArtifact@2
-        //    //  inputs:
-        //    //    #source: 'current' # Options: current, specific
-        //    //    #project: # Required when source == Specific
-        //    //    #pipeline: # Required when source == Specific
-        //    //    #preferTriggeringPipeline: false # Optional
-        //    //    #runVersion: 'latest' # Required when source == Specific# Options: latest, latestFromBranch, specific
-        //    //    #runBranch: 'refs/heads/master' # Required when source == Specific && RunVersion == LatestFromBranch
-        //    //    #runId: # Required when source == Specific && RunVersion == Specific
-        //    //    #tags: # Optional
-        //    //    #artifact: # Optional
-        //    //    #patterns: '**' # Optional
-        //    //    #path: '$(Pipeline.Workspace)' 
+           // To:
+           // - name: Download serviceapp artifact
+           //   uses: actions/download-artifact@v2
+           //   with:
+           //     name: serviceapp
 
-        //    //To:
-        //    //- name: Download serviceapp artifact
-        //    //  uses: actions/download-artifact@v1.0.0
-        //    //  with:
-        //    //    name: serviceapp
-        //    return gitHubStep;
-        //}
+           return gitHubStep;
+        }
 
         private GitHubActions.Step CreateCopyFilesStep(AzurePipelines.Step step)
         {
@@ -1872,15 +1887,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                 if (supportingSteps?.Count > 0)
                 {
-                    try
-                    {
-                        // order those in, supporting steps come first
-                        newSteps.InsertRange(newStepOffset - 1, supportingSteps);
-                    }
-                    catch (System.Exception ex)
-                    {
-                        int i = 0;
-                    }
+                    // order those in, supporting steps come first
+                    newSteps.InsertRange(newStepOffset - 1, supportingSteps);
                 }
             }
 
