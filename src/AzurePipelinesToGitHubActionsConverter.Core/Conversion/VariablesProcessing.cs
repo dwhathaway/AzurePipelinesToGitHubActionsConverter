@@ -428,7 +428,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             // track the secret definition as we'll later look to replace usages
                             secrets.Add(groupVar.Key);
 
-                            if (KeyVaultGroup == null)
+                            if (KeyVaultGroup?.name != varGroup.name)
                             {
                                 // for secret, non-KV values, we'll convert them to env vars using the secrets syntax
                                 envVarTable.Insert(groupIndex++, groupVar.Key, $"${{{{ secrets.{ groupVar.Key } }}}}");
@@ -436,7 +436,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         }
                     }
 
-                    actionsRoot.messages.AddIfUnique($"Note: The consumed values from a variable group ({ varGroup.name }) has been imported from Azure DevOps. Please review varable usage and any secret values used in this workflow, which have been migrated to GitHub secrets syntax");
+                    if (KeyVaultGroup?.name == varGroup.name)
+                    {
+                        actionsRoot.messages.AddIfUnique($"Note: The consumed values from a variable group ({ varGroup.name }) have been imported from Azure DevOps. Please review variable usage and any secret values used in this workflow, which have been migrated to GitHub secrets syntax");
+                    }
                 }
 
                 var envVars = new string[envVarTable.Count];
