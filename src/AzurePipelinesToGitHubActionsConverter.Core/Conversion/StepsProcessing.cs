@@ -35,6 +35,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     case "AZUREAPPSERVICEMANAGE@0":
                         gitHubStep = CreateAzureAppServiceManageStep(step);
                         break;
+                    case "AZUREFILECOPY@4":
+                        gitHubStep = CreateAzureFileCopyStep(step);
+                        break;
                     case "AZURERESOURCEGROUPDEPLOYMENT@2":
                         gitHubStep = CreateAzureManageResourcesStep(step);
                         break;
@@ -132,24 +135,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         gitHubStep = CreateXamariniOSStep(step);
                         break;
                     default:
-                        gitHubStep = CreateScriptStep(step, ShellType.PowerShell);
-                        string newYaml = GenericObjectSerialization.SerializeYaml<AzurePipelines.Step>(step);
-                        string[] newYamlSplit = newYaml.Split(System.Environment.NewLine);
-                        StringBuilder yamlBuilder = new StringBuilder();
-
-                        for (int i = 0; i < newYamlSplit.Length; i++)
-                        {
-                            string line = newYamlSplit[i];
-                            
-                            if (line.Trim().Length > 0)
-                            {
-                                yamlBuilder.Append("#");
-                                yamlBuilder.Append(line);
-                            }
-                        }
-
-                        gitHubStep.step_message = "Note: Error! This step does not have a conversion path yet: " + step.task;
-                        gitHubStep.run = "Write-Host " + gitHubStep.step_message + " " + yamlBuilder.ToString();
+                        gitHubStep = CreateUnconvertedStep(step);
                         break;
                 }
             }
@@ -240,6 +226,30 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
 
             return step;
+        }
+
+        private GitHubActions.Step CreateUnconvertedStep(AzurePipelines.Step step, string error = null)
+        {
+            var gitHubStep = CreateScriptStep(step, ShellType.PowerShell);
+            string newYaml = GenericObjectSerialization.SerializeYaml<AzurePipelines.Step>(step);
+            string[] newYamlSplit = newYaml.Split(System.Environment.NewLine);
+            StringBuilder yamlBuilder = new StringBuilder();
+
+            for (int i = 0; i < newYamlSplit.Length; i++)
+            {
+                string line = newYamlSplit[i];
+
+                if (line.Trim().Length > 0)
+                {
+                    yamlBuilder.Append("#");
+                    yamlBuilder.Append(line);
+                }
+            }
+
+            gitHubStep.step_message = error ?? $"Note: Error! This step does not have a conversion path yet: { step.task }";
+            gitHubStep.run = $"Write-Host { gitHubStep.step_message } { yamlBuilder }";
+
+            return gitHubStep;
         }
 
         private GitHubActions.Step CreateDotNetCommandStep(AzurePipelines.Step step)
@@ -375,6 +385,73 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             if (!string.IsNullOrEmpty(path))
             {
                 gitHubStep.with.Add("path", path);
+            }
+
+            return gitHubStep;
+        }
+
+        private GitHubActions.Step CreateAzureFileCopyStep(AzurePipelines.Step step)
+        {
+            // From:
+            // - task: AzureFileCopy@4
+            // displayName: 'Copy artifacts to sebuildarchive'
+            // inputs:
+            //     sourcePath: ${{variables.ArchiveFolder}}
+            //     azureSubscription: MCBuildArchive
+            //     destination: azureBlob
+            //     storage: sebuildarchive
+            //     containerName: minecraft
+            //     blobPrefix: $(RC_TAG)/${{parameters.Definition}}/${{parameters.BuildId}}
+
+            // To:
+            // - name: Azure CLI script
+            // uses: azure/CLI@v1
+            // with:
+            //     azcliversion: 2.0.72 // defaults to latest
+            //     inlineScript: |
+            //     az storage blob upload-batch --destination { containerName } --source { sourcePath }
+
+
+            var destination = GetStepInput(step, "destination");
+
+            if (destination.ToLower() != "azureblob")
+            {
+                return CreateUnconvertedStep(step, "NOTE: AzureFileCopy conversion failed; can not convert task with destination of 'AzureVMs'");
+            }
+
+            var sourcePath = GetStepInput(step, "sourcePath");
+            var containerName = GetStepInput(step, "containerName");
+
+            var gitHubStep = new GitHubActions.Step
+            {
+                name = step.displayName,
+                uses = "Azure/CLI@v1",
+                with = new OrderedDictionary
+                {
+                    { "inlineScript", $"az storage blob upload-batch --destination { containerName } --source { sourcePath }" }
+                },
+                DependsOn = GitHubActions.StepDependencies.AzureLogin
+            };
+
+            var blobPrefix = GetStepInput(step, "blobPrefix");
+
+            if (!string.IsNullOrEmpty(blobPrefix))
+            {
+                gitHubStep.with["inlineScript"] += $" --destination-path { blobPrefix }";
+            }
+
+            var azureSubscription = GetStepInput(step, "azureSubscription");
+
+            if (!string.IsNullOrEmpty(azureSubscription))
+            {
+                gitHubStep.with["inlineScript"] += $" --subscription { azureSubscription }";
+            }
+
+            var storage = GetStepInput(step, "storage");
+
+            if (!string.IsNullOrEmpty(storage))
+            {
+                gitHubStep.with["inlineScript"] += $" --account-name { storage }";
             }
 
             return gitHubStep;
@@ -588,6 +665,16 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 if (string.IsNullOrWhiteSpace(gitHubStep.run.Last().ToString())) // yaml.net can choose an alternate serialization style if the last char is whitespace
                 {
                     gitHubStep.run = gitHubStep.run.Remove(gitHubStep.run.Length - 1);
+                }
+
+                if (gitHubStep.run.StartsWith(System.Environment.NewLine))
+                {
+                    int i = 0;
+                }
+
+                if (string.IsNullOrWhiteSpace(gitHubStep.run.First().ToString()))
+                {
+                    var leadingWhitespace = true;
                 }
             }
 
