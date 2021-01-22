@@ -436,7 +436,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         }
                     }
 
-                    if (KeyVaultGroup?.name == varGroup.name)
+                    if (KeyVaultGroup?.name != varGroup.name)
                     {
                         actionsRoot.messages.AddIfUnique($"Note: The consumed values from a variable group ({ varGroup.name }) have been imported from Azure DevOps. Please review variable usage and any secret values used in this workflow, which have been migrated to GitHub secrets syntax");
                     }
