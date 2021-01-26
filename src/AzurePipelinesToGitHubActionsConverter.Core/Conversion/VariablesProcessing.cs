@@ -38,7 +38,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         {
             SystemVariableMapping.Define("Agent.WorkFolder", "github.workspace"), // runner.workspace will not validate in Workflow or Job-level env
             SystemVariableMapping.Define("Agent.BuildDirectory", "runner.workspace"),
+            SystemVariableMapping.Define("Agent.OS", "runner.OS"),
             SystemVariableMapping.Define("Pipeline.Workspace", "runner.workspace"),
+            SystemVariableMapping.Define("Build.BinariesDirectory", "github.workspace"),
             SystemVariableMapping.Define("Build.BuildId", "github.run_id"),
             SystemVariableMapping.Define("Build.BuildNumber", "github.run_number"),
             SystemVariableMapping.Define("Build.DefinitionName", "github.workflow"),

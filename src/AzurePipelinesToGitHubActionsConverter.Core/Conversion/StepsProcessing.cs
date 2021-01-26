@@ -1585,10 +1585,17 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             //Going to:
             //- run: python Python/Hello.py
 
-            string scriptPath = GetStepInput(step, "scriptPath");
+            var scriptPath = GetStepInput(step, "scriptPath");
 
-            string pythonCommand = "python " + scriptPath;
+            var pythonCommand = "python " + scriptPath;
             step.script = pythonCommand;
+
+            var args = GetStepInput(step, "arguments");
+
+            if (!string.IsNullOrEmpty(args))
+            {
+                step.script += $" {args}";
+            }
 
             return CreateScriptStep(step);
         }
