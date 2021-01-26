@@ -9,6 +9,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 {
     public class StagesProcessing
     {
+        public string MatrixVariableName;
         private readonly bool _verbose;
         private readonly VariablesProcessing _variableProcessing;
 
@@ -140,6 +141,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 {
                     var jobProcessing = new JobProcessing(_variableProcessing, _verbose);
                     gitHubJobs.Add(job.job, jobProcessing.ProcessJob(job, null));
+
+                    // pass thru the matrix var name found in the Job
+                    MatrixVariableName = MatrixVariableName ?? jobProcessing.MatrixVariableName;
                 }
 
                 return gitHubJobs;

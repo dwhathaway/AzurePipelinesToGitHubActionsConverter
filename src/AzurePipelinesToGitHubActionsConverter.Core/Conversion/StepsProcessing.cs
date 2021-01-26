@@ -1576,14 +1576,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreatePythonStep(AzurePipelines.Step step)
         {
-            //coming from:
-            //- task: PythonScript@0
-            //  inputs:
-            //    scriptSource: 'filePath'
-            //    scriptPath: 'Python/Hello.py'
+            // coming from:
+            // - task: PythonScript@0
+            //   inputs:
+            //     scriptSource: 'filePath'
+            //     scriptPath: 'Python/Hello.py'
 
-            //Going to:
-            //- run: python Python/Hello.py
+            // Going to:
+            // - run: python Python/Hello.py
 
             var scriptPath = GetStepInput(step, "scriptPath");
 

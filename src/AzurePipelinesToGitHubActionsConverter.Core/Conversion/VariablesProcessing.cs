@@ -574,7 +574,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 // Only do replacement if this is one of the vars we've identified... stops false positives like job.status
                 var definedVar = uniqueVars.SingleOrDefault(v => v.ToUpper() == varName.ToUpper());
 
-                if (definedVar != null)
+                if (varName == matrixVariableName) // matrix var
+                {
+                    yaml = yaml.Replace(match.Value, $"${{{{ matrix.{ varName } }}}}");
+                }
+                else if (definedVar != null)
                 {
                     var isSecret = secrets.Contains(definedVar);
 
@@ -583,13 +587,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         yaml = yaml.Replace(match.Value, $"${{{{ steps.{ KeyVaultGroup.name }.outputs.{ definedVar } }}}}");
                     }
-                    else if (varName != matrixVariableName) // other typical vars, including secrets converted to GH secrets API
+                    else // other typical vars, including secrets converted to GH secrets API
                     {
                         yaml = yaml.Replace(match.Value, $"${{{{ env.{ definedVar } }}}}");
-                    }
-                    else // matrix var
-                    {
-                        yaml = yaml.Replace(match.Value, $"${{{{ matrix.{ definedVar } }}}}");
                     }
 
                     // keep track of any that we use, so we can handle those we don't further below

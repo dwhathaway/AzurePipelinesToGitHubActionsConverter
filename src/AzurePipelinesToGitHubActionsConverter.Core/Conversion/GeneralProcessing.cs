@@ -68,7 +68,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                     try
                     {
-                        //when the environment is just a simple string, e.g.  //environment: environmentName.resourceName
+                        // when the environment is just a simple string, e.g.  //environment: environmentName.resourceName
                         string simpleEnvironment = GenericObjectSerialization.DeserializeYaml<string>(environmentYaml);
 
                         environment = new AzurePipelines.Environment
@@ -118,7 +118,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                                 resourceType = resourceType
                             };
 
-                            //Move the single string demands to an array
+                            // Move the single string demands to an array
                             environment.tags = new string[1];
                             environment.tags[0] = json["tags"].ToString();
                         }
@@ -157,8 +157,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 try
                 {
                     // Most often, the pool will be in this structure
-                    AzurePipelines.Strategy strategy = GenericObjectSerialization.DeserializeYaml<AzurePipelines.Strategy>(strategyYaml);
-                    return strategy;
+                    return GenericObjectSerialization.DeserializeYaml<AzurePipelines.Strategy>(strategyYaml);
                 }
                 catch (Exception ex)
                 {
@@ -197,14 +196,14 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 try
                 {
-                    //Most often, the pool will be in this structure
+                    // Most often, the pool will be in this structure
                     pool = GenericObjectSerialization.DeserializeYaml<Pool>(poolYaml);
                 }
                 catch (Exception ex)
                 {
                     ConversionUtility.WriteLine($"DeserializeYaml<Pool>(poolYaml) swallowed an exception: " + ex.Message, _verbose);
 
-                    //If it's a simple pool string, and has no json in it, assign it to the name
+                    // If it's a simple pool string, and has no json in it, assign it to the name
                     if (poolYaml.IndexOf("{") < 0)
                     {
                         pool = new Pool
@@ -214,7 +213,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     }
                     else
                     {
-                        //otherwise, demands is probably a string, instead of string[], let's fix it
+                        // otherwise, demands is probably a string, instead of string[], let's fix it
                         JObject json = JSONSerialization.DeserializeStringToObject(poolYaml);
 
                         if (json["demands"].Type.ToString() == "String")
@@ -246,7 +245,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                                 vmImage = vmImage
                             };
 
-                            //Move the single string demands to an array
+                            // Move the single string demands to an array
                             pool.demands = new string[1];
                             pool.demands[0] = demands;
                         }
@@ -264,25 +263,25 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         // process the strategy matrix
         public GitHubActions.Strategy ProcessStrategy(AzurePipelines.Strategy strategy)
         {
-            //Azure DevOps
-            //strategy:
-            //  matrix:
-            //    linux:
-            //      imageName: ubuntu - 16.04
-            //    mac:
-            //      imageName: macos-10.13
-            //    windows:
-            //      imageName: vs2017-win2016
-            //jobs:
-            //- job: Build
-            //  pool: 
-            //    vmImage: $(imageName)
+            // Azure DevOps
+            // strategy:
+            //   matrix:
+            //     linux:
+            //       imageName: ubuntu - 16.04
+            //     mac:
+            //       imageName: macos-10.13
+            //     windows:
+            //       imageName: vs2017-win2016
+            // jobs:
+            // - job: Build
+            //   pool: 
+            //     vmImage: $(imageName)
 
-            //GitHub Actions
-            //runs-on: ${{ matrix.imageName }}
-            //strategy:
-            //  matrix:
-            //    imageName: [ubuntu-16.04, macos-10.13, vs2017-win2016]
+            // GitHub Actions
+            // runs-on: ${{ matrix.imageName }}
+            // strategy:
+            //   matrix:
+            //     imageName: [ubuntu-16.04, macos-10.13, vs2017-win2016]
 
             if (strategy != null)
             {
@@ -343,29 +342,29 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         public GitHubActions.Container ProcessContainer(Resources resources)
         {
-            //FROM
-            //resources:
-            //  containers:
-            //  - container: string  # identifier (A-Z, a-z, 0-9, and underscore)
-            //    image: string  # container image name
-            //    options: string  # arguments to pass to container at startup
-            //    endpoint: string  # reference to a service connection for the private registry
-            //    env: { string: string }  # list of environment variables to add
-            //    ports: [ string ] # ports to expose on the container
-            //    volumes: [ string ] # volumes to mount on the container
+            // FROM
+            // resources:
+            //   containers:
+            //   - container: string  # identifier (A-Z, a-z, 0-9, and underscore)
+            //     image: string  # container image name
+            //     options: string  # arguments to pass to container at startup
+            //     endpoint: string  # reference to a service connection for the private registry
+            //     env: { string: string }  # list of environment variables to add
+            //     ports: [ string ] # ports to expose on the container
+            //     volumes: [ string ] # volumes to mount on the container
 
-            //TO
-            //jobs:
-            //  my_job:
-            //    container:
-            //      image: node:10.16-jessie
-            //      env:
-            //        NODE_ENV: development
-            //      ports:
-            //        - 80
-            //      volumes:
-            //        - my_docker_volume:/volume_mount
-            //      options: --cpus 1
+            // TO
+            // jobs:
+            //   my_job:
+            //     container:
+            //       image: node:10.16-jessie
+            //       env:
+            //         NODE_ENV: development
+            //       ports:
+            //         - 80
+            //       volumes:
+            //         - my_docker_volume:/volume_mount
+            //       options: --cpus 1
 
             if (resources != null && resources.containers != null && resources.containers.Length > 0)
             {

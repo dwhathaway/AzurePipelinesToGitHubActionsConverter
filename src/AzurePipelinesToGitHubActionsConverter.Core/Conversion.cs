@@ -341,6 +341,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 {
                     var sp = new StagesProcessing(vp, _verbose);
                     gitHubActions.jobs = sp.ProcessStagesV2(json["stages"], strategyYaml);
+                    _matrixVariableName = sp.MatrixVariableName;
                 }
                 // If we don't have stages, but have jobs:
                 else if (json["stages"] == null && json["jobs"] != null)
