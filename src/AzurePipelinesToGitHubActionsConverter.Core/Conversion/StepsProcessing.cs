@@ -460,16 +460,50 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         private GitHubActions.Step CreateCopyFilesStep(AzurePipelines.Step step)
         {
             // Use PowerShell to copy files
-            var contents = GetStepInput(step, "contents");
-            var paths = contents.Split(System.Environment.NewLine).TakeWhile(s => !string.IsNullOrWhiteSpace(s));
+            var contentsString = GetStepInput(step, "contents");
+            var contents = contentsString.Split(System.Environment.NewLine).TakeWhile(s => !string.IsNullOrWhiteSpace(s));
+            var sourceFolder = GetStepInput(step, "sourcefolder");
             var targetFolder = GetStepInput(step, "targetfolder");
             
             // ensure folder exists - this tracks with CopyFiles@2 behavior
-            step.script += System.Environment.NewLine + $"md -Force { targetFolder }" + System.Environment.NewLine;
+            step.script += System.Environment.NewLine + $"md -Force '{ targetFolder }'" + System.Environment.NewLine;
 
-            foreach (var path in paths)
+            var exclusions = contents.Where(f => f.StartsWith("!"));
+            var filters = contents.Except(exclusions);
+            var excludeArgs = string.Empty;
+
+            if (exclusions.Any())
             {
-                step.script += System.Environment.NewLine + $"Copy '{ GetStepInput(step, "sourcefolder") }/{ path }' '{ targetFolder }'" + System.Environment.NewLine;
+                var excludeList = string.Join(",", exclusions.Select(e => $"*{ e.Trim('!', '*', '\\', '/') }*"));
+                excludeArgs = $" -Exclude '{ excludeList }' | Where {{$_.FullName -NotMatch '{ excludeList.Replace("*", "") }'}}";
+            }
+
+            foreach (var adoFilter in filters)
+            {
+                var filter = adoFilter;
+                var args = string.Empty;
+
+                // is this recursive?
+                if (filter.StartsWith("**"))
+                {
+                    args += " -Recurse";
+                    // remove glob pattern prefix
+                    filter = filter.Remove(0, 2);
+                }
+
+                if (filter.Length > 0)
+                {
+                    if (filter[0] == '\\' || filter[0] == '/')
+                    {
+                        filter = filter.Remove(0, 1);
+                    }
+
+                    args += $" -Filter { filter }";
+                }
+
+                args += excludeArgs;
+
+                step.script += System.Environment.NewLine + $"Get-ChildItem -Path '{ sourceFolder }'{ args } | Copy-Item -Destination '{ targetFolder }' -Recurse -Container" + System.Environment.NewLine;
             }
 
             return CreateScriptStep(step, ShellType.PowerShell);
