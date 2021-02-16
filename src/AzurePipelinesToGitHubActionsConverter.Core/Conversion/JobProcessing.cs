@@ -36,7 +36,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 container = generalProcessing.ProcessContainer(resources),
                 env = _variableProcessing.ProcessSimpleVariables(job.variables),
                 timeout_minutes = job.timeoutInMinutes,
-                steps = sp.AddSupportingSteps(job.steps, _variableProcessing, job.variables)
+                steps = sp.TranslateSteps(job.steps, _variableProcessing, job.variables)
             };
 
             MatrixVariableName = generalProcessing.MatrixVariableName;
@@ -47,7 +47,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 // Initialize the array with no items
                 job.steps = new AzurePipelines.Step[0];
                 // Process the steps, adding the default checkout step
-                newJob.steps = sp.AddSupportingSteps(job.steps, _variableProcessing, job.variables);
+                newJob.steps = sp.TranslateSteps(job.steps, _variableProcessing, job.variables);
                 // TODO: There is currently no conversion path for templates
                 newJob.job_message += "Note: Azure DevOps template does not have an equivalent in GitHub Actions yet";
             }
@@ -56,7 +56,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 // Initialize the array with no items
                 job.steps = new AzurePipelines.Step[0];
                 // Process the steps, DO NOT add the default checkout step
-                newJob.steps = sp.AddSupportingSteps(job.strategy?.runOnce?.deploy?.steps, _variableProcessing, job.variables, false);
+                newJob.steps = sp.TranslateSteps(job.strategy?.runOnce?.deploy?.steps, _variableProcessing, job.variables, false);
                 // TODO: There is currently no conversion path for templates
                 newJob.job_message += "Note: Azure DevOps strategy>runOnce>deploy does not have an equivalent in GitHub Actions yet";
             }

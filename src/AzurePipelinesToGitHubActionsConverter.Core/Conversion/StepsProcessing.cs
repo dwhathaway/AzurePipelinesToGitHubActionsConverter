@@ -93,7 +93,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         gitHubStep = CreateNuGetCommandStep(step);
                         break;
                     case "NUGETTOOLINSTALLER@1":
-                        gitHubStep = CreateNuGetToolInstallerStep();
+                        gitHubStep = CreateNuGetToolInstallerStep(step);
                         break;
                     case "POWERSHELL@1":
                     case "POWERSHELL@2":
@@ -258,22 +258,22 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 string runScript = "dotnet ";
 
-                if (step.inputs.Contains("command") == true)
+                if (step.inputs.Contains("command"))
                 {
                     runScript += GetStepInput(step, "command") + " ";
                 }
 
-                if (step.inputs.Contains("projects") == true)
+                if (step.inputs.Contains("projects"))
                 {
                     runScript += GetStepInput(step, "projects") + " ";
                 }
 
-                if (step.inputs.Contains("packagestopack") == true)
+                if (step.inputs.Contains("packagestopack"))
                 {
                     runScript += GetStepInput(step, "packagesToPack") + " ";
                 }
 
-                if (step.inputs.Contains("arguments") == true)
+                if (step.inputs.Contains("arguments"))
                 {
                     runScript += GetStepInput(step, "arguments") + " ";
                 }
@@ -394,8 +394,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         {
             // From:
             // - task: AzureFileCopy@4
-            // displayName: 'Copy artifacts to sebuildarchive'
-            // inputs:
+            //   displayName: 'Copy artifacts to sebuildarchive'
+            //   inputs:
             //     sourcePath: ${{variables.ArchiveFolder}}
             //     azureSubscription: MCBuildArchive
             //     destination: azureBlob
@@ -405,8 +405,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             // To:
             // - name: Azure CLI script
-            // uses: azure/CLI@v1
-            // with:
+            //   uses: azure/CLI@v1
+            //   with:
             //     azcliversion: 2.0.72 // defaults to latest
             //     inlineScript: |
             //     az storage blob upload-batch --destination { containerName } --source { sourcePath }
@@ -511,34 +511,34 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreateDockerStep(AzurePipelines.Step step)
         {
-            //From: https://docs.microsoft.com/en-us/azure/devops/pipelines/tasks/build/docker?view=azure-devops
-            //- task: Docker@2
-            //  displayName: Build
-            //  inputs:
-            //    command: build
-            //    repository: contosoRepository
-            //    dockerfile: MyDockerFile
-            //    containerRegistry: dockerRegistryServiceConnection
-            //    tags: tag1
-            //    arguments: --secret id=mysecret,src=mysecret.txt
+            // From: https://docs.microsoft.com/en-us/azure/devops/pipelines/tasks/build/docker?view=azure-devops
+            // - task: Docker@2
+            //   displayName: Build
+            //   inputs:
+            //     command: build
+            //     repository: contosoRepository
+            //     dockerfile: MyDockerFile
+            //     containerRegistry: dockerRegistryServiceConnection
+            //     tags: tag1
+            //     arguments: --secret id=mysecret,src=mysecret.txt
 
-            //- task: Docker@1
-            //  displayName: Push
-            //  inputs:
-            //    azureSubscriptionEndpoint: '$(Azure.ServiceConnectionId)'
-            //    azureContainerRegistry: '$(ACR.FullName)'
-            //    imageName: '$(ACR.ImageName)'
-            //    command: push
-
-
-            //To: https://github.com/marketplace/actions/docker-build-push
-            //- name: Build the Docker image
-            //  run: docker build . --file MyDockerFile --tag my-image-name:$(date +%s)
+            // - task: Docker@1
+            //   displayName: Push
+            //   inputs:
+            //     azureSubscriptionEndpoint: '$(Azure.ServiceConnectionId)'
+            //     azureContainerRegistry: '$(ACR.FullName)'
+            //     imageName: '$(ACR.ImageName)'
+            //     command: push
 
 
-            //Docker 1 inputs
-            //string azureSubscriptionEndpoint = GetStepInput(step, "azureSubscriptionEndpoint");
-            //string azureContainerRegistry = GetStepInput(step, "azureContainerRegistry");
+            // To: https://github.com/marketplace/actions/docker-build-push
+            // - name: Build the Docker image
+            //   run: docker build . --file MyDockerFile --tag my-image-name:$(date +%s)
+
+
+            // Docker 1 inputs
+            // string azureSubscriptionEndpoint = GetStepInput(step, "azureSubscriptionEndpoint");
+            // string azureContainerRegistry = GetStepInput(step, "azureContainerRegistry");
 
             // Docker 2 inputs
             string command = GetStepInput(step, "command");
@@ -553,6 +553,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             // Very very simple. Needs more branches and logic
             string dockerScript = "";
             string stepMessage = "";
+            
             switch (command)
             {
                 case "build":
@@ -805,14 +806,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreateUseDotNetStep(AzurePipelines.Step step)
         {
-            var gitHubStep = new GitHubActions.Step
-            {
-                uses = "actions/setup-dotnet@v1",
-                with = new OrderedDictionary
-                {
-                    { "dotnet-version", GetStepInput(step, "version") }
-                }
-            };
             // Pipelines
             // - task: UseDotNet@2
             //   displayName: 'Use .NET Core sdk'
@@ -825,7 +818,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             // - uses: actions/setup-dotnet@v1
             //   with:
             //     dotnet-version: '2.2.103' # SDK Version to use.
-            return gitHubStep;
+            
+            return new GitHubActions.Step
+            {
+                uses = "actions/setup-dotnet@v1",
+                with = new OrderedDictionary
+                {
+                    { "dotnet-version", GetStepInput(step, "version") }
+                }
+            };
         }
 
         private GitHubActions.Step CreateAzureManageResourcesStep(AzurePipelines.Step step)
@@ -874,7 +875,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             return new GitHubActions.Step
             {
-                uses = "Azure/cli@v1.0.0",
+                uses = "Azure/CLI@v1",
                 with = new OrderedDictionary
                 {
                     { "inlineScript", script }
@@ -937,11 +938,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             // Going to:
             // - name: Deploy web service to Azure WebApp
-            //   uses: Azure/webapps-deploy@v1
+            //   uses: Azure/webapps-deploy@v2
             //   with:
             //     app-name: myproject-service
             //     package: serviceapp
-            //     slot-name: staging   
+            //     slot-name: staging
 
             return gitHubStep;
         }
@@ -950,7 +951,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         {
             string command = GetStepInput(step, "command");
 
-            if (string.IsNullOrEmpty(command) == false)
+            if (!string.IsNullOrEmpty(command))
             {
                 command = "restore";
             }
@@ -960,63 +961,62 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             var gitHubStep = CreateScriptStep(step, ShellType.PowerShell);
             gitHubStep.run = "nuget " + command + " " + restoresolution;
 
-            //coming from:
-            //# NuGet
-            //# Restore, pack, or push NuGet packages, or run a NuGet command. Supports NuGet.org and authenticated feeds like Azure Artifacts and MyGet. Uses NuGet.exe and works with .NET Framework apps. For .NET Core and .NET Standard apps, use the .NET Core task.
-            //- task: NuGetCommand@2
-            //  inputs:
-            //    #command: 'restore' # Options: restore, pack, push, custom
-            //    #restoreSolution: '**/*.sln' # Required when command == Restore
-            //    #feedsToUse: 'select' # Options: select, config
-            //    #vstsFeed: # Required when feedsToUse == Select
-            //    #includeNuGetOrg: true # Required when feedsToUse == Select
-            //    #nugetConfigPath: # Required when feedsToUse == Config
-            //    #externalFeedCredentials: # Optional
-            //    #noCache: false 
-            //    #disableParallelProcessing: false 
-            //    restoreDirectory: 
-            //    #verbosityRestore: 'Detailed' # Options: quiet, normal, detailed
-            //    #packagesToPush: '$(Build.ArtifactStagingDirectory)/**/*.nupkg;!$(Build.ArtifactStagingDirectory)/**/*.symbols.nupkg' # Required when command == Push
-            //    #nuGetFeedType: 'internal' # Required when command == Push# Options: internal, external
-            //    #publishVstsFeed: # Required when command == Push && NuGetFeedType == Internal
-            //    #publishPackageMetadata: true # Optional
-            //    #allowPackageConflicts: # Optional
-            //    #publishFeedCredentials: # Required when command == Push && NuGetFeedType == External
-            //    #verbosityPush: 'Detailed' # Options: quiet, normal, detailed
-            //    #packagesToPack: '**/*.csproj' # Required when command == Pack
-            //    #configuration: '$(BuildConfiguration)' # Optional
-            //    #packDestination: '$(Build.ArtifactStagingDirectory)' # Optional
-            //    #versioningScheme: 'off' # Options: off, byPrereleaseNumber, byEnvVar, byBuildNumber
-            //    #includeReferencedProjects: false # Optional
-            //    #versionEnvVar: # Required when versioningScheme == ByEnvVar
-            //    #majorVersion: '1' # Required when versioningScheme == ByPrereleaseNumber
-            //    #minorVersion: '0' # Required when versioningScheme == ByPrereleaseNumber
-            //    #patchVersion: '0' # Required when versioningScheme == ByPrereleaseNumber
-            //    #packTimezone: 'utc' # Required when versioningScheme == ByPrereleaseNumber# Options: utc, local
-            //    #includeSymbols: false # Optional
-            //    #toolPackage: # Optional
-            //    #buildProperties: # Optional
-            //    #basePath: # Optional, specify path to nuspec files
-            //    #verbosityPack: 'Detailed' # Options: quiet, normal, detailed
-            //    #arguments: # Required when command == Custom
+            // Coming from:
+            // # NuGet
+            // # Restore, pack, or push NuGet packages, or run a NuGet command. Supports NuGet.org and authenticated feeds like Azure Artifacts and MyGet. Uses NuGet.exe and works with .NET Framework apps. For .NET Core and .NET Standard apps, use the .NET Core task.
+            // - task: NuGetCommand@2
+            //   inputs:
+            //     #command: 'restore' # Options: restore, pack, push, custom
+            //     #restoreSolution: '**/*.sln' # Required when command == Restore
+            //     #feedsToUse: 'select' # Options: select, config
+            //     #vstsFeed: # Required when feedsToUse == Select
+            //     #includeNuGetOrg: true # Required when feedsToUse == Select
+            //     #nugetConfigPath: # Required when feedsToUse == Config
+            //     #externalFeedCredentials: # Optional
+            //     #noCache: false 
+            //     #disableParallelProcessing: false 
+            //     restoreDirectory: 
+            //     #verbosityRestore: 'Detailed' # Options: quiet, normal, detailed
+            //     #packagesToPush: '$(Build.ArtifactStagingDirectory)/**/*.nupkg;!$(Build.ArtifactStagingDirectory)/**/*.symbols.nupkg' # Required when command == Push
+            //     #nuGetFeedType: 'internal' # Required when command == Push# Options: internal, external
+            //     #publishVstsFeed: # Required when command == Push && NuGetFeedType == Internal
+            //     #publishPackageMetadata: true # Optional
+            //     #allowPackageConflicts: # Optional
+            //     #publishFeedCredentials: # Required when command == Push && NuGetFeedType == External
+            //     #verbosityPush: 'Detailed' # Options: quiet, normal, detailed
+            //     #packagesToPack: '**/*.csproj' # Required when command == Pack
+            //     #configuration: '$(BuildConfiguration)' # Optional
+            //     #packDestination: '$(Build.ArtifactStagingDirectory)' # Optional
+            //     #versioningScheme: 'off' # Options: off, byPrereleaseNumber, byEnvVar, byBuildNumber
+            //     #includeReferencedProjects: false # Optional
+            //     #versionEnvVar: # Required when versioningScheme == ByEnvVar
+            //     #majorVersion: '1' # Required when versioningScheme == ByPrereleaseNumber
+            //     #minorVersion: '0' # Required when versioningScheme == ByPrereleaseNumber
+            //     #patchVersion: '0' # Required when versioningScheme == ByPrereleaseNumber
+            //     #packTimezone: 'utc' # Required when versioningScheme == ByPrereleaseNumber# Options: utc, local
+            //     #includeSymbols: false # Optional
+            //     #toolPackage: # Optional
+            //     #buildProperties: # Optional
+            //     #basePath: # Optional, specify path to nuspec files
+            //     #verbosityPack: 'Detailed' # Options: quiet, normal, detailed
+            //     #arguments: # Required when command == Custom
 
-            //Going to:
-            //- name: Nuget Push
-            //  run: nuget push *.nupkg
+            // Going to:
+            // - name: Nuget Push
+            //   run: nuget push *.nupkg
 
             return gitHubStep;
         }
 
-        // https://github.com/warrenbuckley/Setup-Nuget
-        private GitHubActions.Step CreateNuGetToolInstallerStep()
+        private GitHubActions.Step CreateNuGetToolInstallerStep(AzurePipelines.Step step)
         {
             var gitHubStep = new GitHubActions.Step
             {
-                uses = "warrenbuckley/Setup-Nuget@v1",
-                step_message = "Note: This is a third party action: https://github.com/warrenbuckley/Setup-Nuget"
+                uses = "nuget/setup-nuget@v1",
+                with = new OrderedDictionary()
             };
 
-            // coming from:
+            // Coming from:
             // # NuGet tool installer
             // # Acquires a specific version of NuGet from the internet or the tools cache and adds it to the PATH. Use this task to change the version of NuGet used in the NuGet tasks.
             // - task: NuGetToolInstaller@0
@@ -1026,7 +1026,19 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             // Going to:
             // - name: Setup Nuget.exe
-            //   uses: warrenbuckley/Setup-Nuget@v1
+            //   uses: nuget/setup-nuget@v1
+            //   with:
+            //     nuget-version: '4.3.0'
+            //     nuget-api-key: ${{ secrets.NuGetAPIKey }}
+
+            var versionSpec = GetStepInput(step, "versionSpec");
+
+            if (!string.IsNullOrEmpty(versionSpec))
+            {
+                gitHubStep.with.Add("nuget-version", versionSpec);
+            }
+
+            // gitHubStep.with.Add("nuget-api-key", "${{ secrets.NuGetAPIKey }}");
 
             return gitHubStep;
         }
@@ -1051,31 +1063,31 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 step_message = "Note: Connection string needs to be specified - this is different than Pipelines where the server, database, user, and password were specified separately. It's recommended you use secrets for the connection string."
             };
 
-            //coming from:
-            //- task: SqlAzureDacpacDeployment@1
-            //  displayName: 'Azure SQL dacpac publish'
-            //  inputs:
-            //    azureSubscription: 'my connection to Azure Portal'
-            //    ServerName: '$(databaseServerName).database.windows.net'
-            //    DatabaseName: '$(databaseName)'
-            //    SqlUsername: '$(databaseLoginName)'
-            //    SqlPassword: '$(databaseLoginPassword)'
-            //    DacpacFile: '$(build.artifactstagingdirectory)/drop/MyDatabase.dacpac'
-            //    additionalArguments: '/p:BlockOnPossibleDataLoss=true'  
+            // Coming from:
+            // - task: SqlAzureDacpacDeployment@1
+            //   displayName: 'Azure SQL dacpac publish'
+            //   inputs:
+            //     azureSubscription: 'my connection to Azure Portal'
+            //     ServerName: '$(databaseServerName).database.windows.net'
+            //     DatabaseName: '$(databaseName)'
+            //     SqlUsername: '$(databaseLoginName)'
+            //     SqlPassword: '$(databaseLoginPassword)'
+            //     DacpacFile: '$(build.artifactstagingdirectory)/drop/MyDatabase.dacpac'
+            //     additionalArguments: '/p:BlockOnPossibleDataLoss=true'  
 
-            //Going to:
-            //- uses: azure/sql-action@v1
-            //  with:
-            //    server-name: REPLACE_THIS_WITH_YOUR_SQL_SERVER_NAME
-            //    connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-            //    dacpac-package: './yourdacpacfile.dacpac'
+            // Going to:
+            // - uses: azure/sql-action@v1
+            //   with:
+            //     server-name: REPLACE_THIS_WITH_YOUR_SQL_SERVER_NAME
+            //     connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+            //     dacpac-package: './yourdacpacfile.dacpac'
 
             return gitHubStep;
         }
 
         private GitHubActions.Step CreateMSBuildStep(AzurePipelines.Step step)
         {
-            // coming from:
+            // Coming from:
             // # Visual Studio build
             // # Build with MSBuild and set the Visual Studio version property
             // - task: VSBuild@1
@@ -1141,30 +1153,30 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreateFunctionalTestingStep(AzurePipelines.Step step)
         {
-            //From:
-            //- task: VSTest@2
-            //  displayName: 'Run functional smoke tests on website and web service'
-            //  inputs:
-            //    searchFolder: '$(build.artifactstagingdirectory)'
-            //    testAssemblyVer2: **\MyProject.FunctionalTests\MyProject.FunctionalTests.dll
-            //    uiTests: true
-            //    runSettingsFile: '$(build.artifactstagingdirectory)/drop/FunctionalTests/MyProject.FunctionalTests/test.runsettings'
-            //    overrideTestrunParameters: |
-            //     -ServiceUrl "https://$(WebServiceName)-staging.azurewebsites.net/" 
-            //     -WebsiteUrl "https://$(WebsiteName)-staging.azurewebsites.net/" 
-            //     -TestEnvironment "$(AppSettings.Environment)" 
+            // From:
+            // - task: VSTest@2
+            //   displayName: 'Run functional smoke tests on website and web service'
+            //   inputs:
+            //     searchFolder: '$(build.artifactstagingdirectory)'
+            //     testAssemblyVer2: **\MyProject.FunctionalTests\MyProject.FunctionalTests.dll
+            //     uiTests: true
+            //     runSettingsFile: '$(build.artifactstagingdirectory)/drop/FunctionalTests/MyProject.FunctionalTests/test.runsettings'
+            //     overrideTestrunParameters: |
+            //      -ServiceUrl "https://$(WebServiceName)-staging.azurewebsites.net/" 
+            //      -WebsiteUrl "https://$(WebsiteName)-staging.azurewebsites.net/" 
+            //      -TestEnvironment "$(AppSettings.Environment)" 
 
-            //To:
-            //- name: Functional Tests
-            //  run: |
-            //    $vsTestConsoleExe = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Enterprise\\Common7\\IDE\\Extensions\\TestPlatform\\vstest.console.exe"
-            //    $targetTestDll = "functionaltests\FeatureFlags.FunctionalTests.dll"
-            //    $testRunSettings = "/Settings:`"functionaltests\test.runsettings`" "
-            //    $parameters = " -- TestEnvironment=""Beta123"" ServiceUrl=""https://featureflags-data-eu-service-staging.azurewebsites.net/"" WebsiteUrl=""https://featureflags-data-eu-web-staging.azurewebsites.net/"" "
-            //    #Note that the `" is an escape character to quote strings, and the `& is needed to start the command
-            //    $command = "`& `"$vsTestConsoleExe`" `"$targetTestDll`" $testRunSettings $parameters " 
-            //    Write-Host "$command"
-            //    Invoke-Expression $command
+            // To:
+            // - name: Functional Tests
+            //   run: |
+            //     $vsTestConsoleExe = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Enterprise\\Common7\\IDE\\Extensions\\TestPlatform\\vstest.console.exe"
+            //     $targetTestDll = "functionaltests\FeatureFlags.FunctionalTests.dll"
+            //     $testRunSettings = "/Settings:`"functionaltests\test.runsettings`" "
+            //     $parameters = " -- TestEnvironment=""Beta123"" ServiceUrl=""https://featureflags-data-eu-service-staging.azurewebsites.net/"" WebsiteUrl=""https://featureflags-data-eu-web-staging.azurewebsites.net/"" "
+            //     #Note that the `" is an escape character to quote strings, and the `& is needed to start the command
+            //     $command = "`& `"$vsTestConsoleExe`" `"$targetTestDll`" $testRunSettings $parameters " 
+            //     Write-Host "$command"
+            //     Invoke-Expression $command
 
             // Defined in the github windows runner.
             // TODO: fix this hardcoded VS path
@@ -1230,7 +1242,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
 
                 run += "$parameters = \" -- " + parameters.ToString() + "\"\n";
-                //run += "$parameters = \"poop\"\n";
             }
 
             run += "#Note that the `\" is an escape character to quote strings, and the `& is needed to start the command\n";
@@ -1274,7 +1285,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         public GitHubActions.Step CreateGradleStep(AzurePipelines.Step step)
         {
-            // coming from:
+            // Coming from:
             // - task: Gradle@2
             //  inputs:
             //    workingDirectory: ''
@@ -1449,7 +1460,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             //     jdkArchitectureOption: 'x64'
             //     publishJUnitResults: true
             //     testResultsFiles: '**/surefire-reports/TEST-*.xml'
-            //     goals: 'package' 
+            //     goals: 'package'
 
             // Going to:
             // - name: Build with Maven
@@ -1517,7 +1528,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 step.script = "npm " + command;
             }
 
-            if (string.IsNullOrEmpty(workingDir) == false)
+            if (!string.IsNullOrEmpty(workingDir))
             {
                 step.script += " " + workingDir;
             }
@@ -1527,17 +1538,17 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreateNodeToolStep(AzurePipelines.Step step)
         {
-            //coming from:
-            //- task: NodeTool@0
-            //  inputs:
-            //    versionSpec: '10.x'
-            //  displayName: 'Install Node.js'
+            // Coming from:
+            // - task: NodeTool@0
+            //   inputs:
+            //     versionSpec: '10.x'
+            //   displayName: 'Install Node.js'
 
-            //Going to:
-            //- name: Use Node.js 10.x
-            //  uses: actions/setup-node@v1
-            //  with:
-            //    node-version: 10.x
+            // Going to:
+            // - name: Use Node.js 10.x
+            //   uses: actions/setup-node@v1
+            //   with:
+            //     node-version: 10.x
 
             string version = GetStepInput(step, "versionSpec");
 
@@ -1554,18 +1565,18 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreateUsePythonStep(AzurePipelines.Step step)
         {
-            //coming from:
-            //- task: UsePythonVersion@0
-            //  inputs:
-            //    versionSpec: '3.7'
-            //    addToPath: true
-            //    architecture: 'x64'
+            // Coming from:
+            // - task: UsePythonVersion@0
+            //   inputs:
+            //     versionSpec: '3.7'
+            //     addToPath: true
+            //     architecture: 'x64'
 
-            //Going to:
-            //- name: Setup Python 3.7
-            //  uses: actions/setup-python@v1
-            //  with:
-            //    python-version: '3.7'
+            // Going to:
+            // - name: Setup Python 3.7
+            //   uses: actions/setup-python@v1
+            //   with:
+            //     python-version: '3.7'
 
             string version = GetStepInput(step, "versionSpec");
 
@@ -1582,18 +1593,17 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreateUseRubyStep(AzurePipelines.Step step)
         {
-            //coming from:
-            //# Use Ruby version: Use the specified version of Ruby from the tool cache, optionally adding it to the PATH
-            //- task: UseRubyVersion@0
-            //  inputs:
-            //    #versionSpec: '>= 2.4' 
-            //    #addToPath: true # Optional
+            // Coming from:
+            // # Use Ruby version: Use the specified version of Ruby from the tool cache, optionally adding it to the PATH
+            // - task: UseRubyVersion@0
+            //   inputs:
+            //     #versionSpec: '>= 2.4' 
+            //     #addToPath: true # Optional
 
-            //Going to:
-            //- uses: actions/setup-ruby@v1
-            //  with:
-            //    ruby-version: 2.6.x
-
+            // Going to:
+            // - uses: actions/setup-ruby@v1
+            //   with:
+            //     ruby-version: 2.6.x
 
             string version = GetStepInput(step, "versionSpec");
 
@@ -1636,25 +1646,25 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreatePublishTestResultsStep(AzurePipelines.Step step)
         {
-            //coming from:
-            //# Publish Test Results
-            //- task: PublishTestResults@2
-            //  inputs:
-            //    #testResultsFormat: 'JUnit' # Options: JUnit, NUnit, VSTest, xUnit, cTest
-            //    #testResultsFiles: '**/TEST-*.xml' 
-            //    #searchFolder: '$(System.DefaultWorkingDirectory)' # Optional
-            //    #mergeTestResults: false # Optional
-            //    #failTaskOnFailedTests: false # Optional
-            //    #testRunTitle: # Optional
-            //    #buildPlatform: # Optional
-            //    #buildConfiguration: # Optional
-            //    #publishRunAttachments: true # Optional
+            // Coming from:
+            // # Publish Test Results
+            // - task: PublishTestResults@2
+            //   inputs:
+            //     #testResultsFormat: 'JUnit' # Options: JUnit, NUnit, VSTest, xUnit, cTest
+            //     #testResultsFiles: '**/TEST-*.xml' 
+            //     #searchFolder: '$(System.DefaultWorkingDirectory)' # Optional
+            //     #mergeTestResults: false # Optional
+            //     #failTaskOnFailedTests: false # Optional
+            //     #testRunTitle: # Optional
+            //     #buildPlatform: # Optional
+            //     #buildConfiguration: # Optional
+            //     #publishRunAttachments: true # Optional
 
-            //TODO: Monitor this when a testing tab is finally added to GitHub
-            //Going to:
-            //- run: echo "This task equivalent does not yet exist in GitHub Actions"
+            // TODO: Monitor this when a testing tab is finally added to GitHub
+            // Going to:
+            // - run: echo "This task equivalent does not yet exist in GitHub Actions"
 
-            //string scriptPath = GetStepInput(step, "scriptPath");
+            // string scriptPath = GetStepInput(step, "scriptPath");
 
             string command = @"echo ""This task equivalent does not yet exist in GitHub Actions""";
             step.script = command;
@@ -1668,20 +1678,20 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreateArchiveFilesStep(AzurePipelines.Step step)
         {
-            //coming from:
-            //- task: ArchiveFiles@2
-            //  displayName: 'Archive files'
-            //  inputs:
-            //    rootFolderOrFile: '$(System.DefaultWorkingDirectory)/publish_output'
-            //    includeRootFolder: false
-            //    archiveType: zip
-            //    archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-            //    replaceExistingArchive: true
+            // coming from:
+            // - task: ArchiveFiles@2
+            //   displayName: 'Archive files'
+            //   inputs:
+            //     rootFolderOrFile: '$(System.DefaultWorkingDirectory)/publish_output'
+            //     includeRootFolder: false
+            //     archiveType: zip
+            //     archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+            //     replaceExistingArchive: true
 
-            //Going to: //https://github.com/marketplace/actions/create-zip-file
-            //- uses: montudor/action-zip@v0.1.0
-            //  with:
-            //    args: zip -qq -r ./dir.zip ./dir
+            // Going to: https://github.com/marketplace/actions/action-zip
+            // - uses: montudor/action-zip@v0.1.1
+            //   with:
+            //     args: zip -qq -r ./dir.zip ./dir
 
             string rootFolderOrFile = GetStepInput(step, "rootFolderOrFile");
             string archiveFile = GetStepInput(step, "archiveFile");
@@ -1690,7 +1700,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             return new GitHubActions.Step
             {
-                uses = "montudor/action-zip@v0.1.0",
+                uses = "montudor/action-zip@v0.1.1",
                 with = new OrderedDictionary
                 {
                     { "args", zipCommand }
@@ -1704,16 +1714,16 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             // https://docs.microsoft.com/en-us/azure/devops/pipelines/tasks/deploy/azure-app-service-manage?view=azure-devops
             // coming from:
             // - task: AzureAppServiceManage@0
-            // displayName: 'Swap Slots: web service'
-            // inputs:
-            //   azureSubscription: 'connection to Azure Portal'
-            //   WebAppName: $(WebServiceName)
-            //   ResourceGroupName: $(ResourceGroupName)
-            //   SourceSlot: 'staging'
+            //   displayName: 'Swap Slots: web service'
+            //   inputs:
+            //     azureSubscription: 'connection to Azure Portal'
+            //     WebAppName: $(WebServiceName)
+            //     ResourceGroupName: $(ResourceGroupName)
+            //     SourceSlot: 'staging'
 
             // Going to:
             // - name: Swap web service staging slot to production
-            //   uses: Azure/cli@v1.0.0
+            //   uses: Azure/CLI@v1
             //   with:
             //     inlineScript: az webapp deployment slot swap --resource-group MyProjectRG --name featureflags-data-eu-service --slot staging --target-slot production
 
@@ -1747,20 +1757,20 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreateXamarinAndroidStep(AzurePipelines.Step step)
         {
-            //coming from:
-            //- task: XamarinAndroid@1
-            //  inputs:
-            //    projectFile: '**/*droid*.csproj'
-            //    outputDirectory: '$(outputDirectory)'
-            //    configuration: '$(buildConfiguration)'
+            // Coming from:
+            // - task: XamarinAndroid@1
+            //   inputs:
+            //     projectFile: '**/*droid*.csproj'
+            //     outputDirectory: '$(outputDirectory)'
+            //     configuration: '$(buildConfiguration)'
 
-            //Going to: https://levelup.gitconnected.com/using-github-actions-with-ios-and-android-xamarin-apps-693a93b48a61
-            //- name: Android
-            //  run: |
-            //    cd Blank
-            //    nuget restore
-            //    cd Blank.Android
-            //    msbuild '**/*droid*.csproj' /verbosity:normal /t:Rebuild /p:Configuration='$(buildConfiguration)'
+            // Going to: https://levelup.gitconnected.com/using-github-actions-with-ios-and-android-xamarin-apps-693a93b48a61
+            // - name: Android
+            //   run: |
+            //     cd Blank
+            //     nuget restore
+            //     cd Blank.Android
+            //     msbuild '**/*droid*.csproj' /verbosity:normal /t:Rebuild /p:Configuration='$(buildConfiguration)'
 
             string projectFile = GetStepInput(step, "projectFile");
             string configuration = GetStepInput(step, "configuration");
@@ -1777,20 +1787,20 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreateXamariniOSStep(AzurePipelines.Step step)
         {
-            //coming from:
-            //- task: XamariniOS@2
-            //  inputs:
-            //    solutionFile: '**/*.sln'
-            //    configuration: 'Release'
-            //    buildForSimulator: true
-            //    packageApp: false
+            // Coming from:
+            // - task: XamariniOS@2
+            //   inputs:
+            //     solutionFile: '**/*.sln'
+            //     configuration: 'Release'
+            //     buildForSimulator: true
+            //     packageApp: false
 
-            //Going to: https://levelup.gitconnected.com/using-github-actions-with-ios-and-android-xamarin-apps-693a93b48a61
-            //- name: iOS
-            //  run: |
-            //    cd Blank
-            //    nuget restore
-            //    msbuild Blank.iOS/Blank.iOS.csproj /verbosity:normal /t:Rebuild /p:Platform=iPhoneSimulator /p:Configuration=Debug
+            // Going to: https://levelup.gitconnected.com/using-github-actions-with-ios-and-android-xamarin-apps-693a93b48a61
+            // - name: iOS
+            //   run: |
+            //     cd Blank
+            //     nuget restore
+            //     msbuild Blank.iOS/Blank.iOS.csproj /verbosity:normal /t:Rebuild /p:Platform=iPhoneSimulator /p:Configuration=Debug
 
             string projectFile = GetStepInput(step, "projectFile");
             string configuration = GetStepInput(step, "configuration");
@@ -1807,29 +1817,29 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         private GitHubActions.Step CreatePublishBuildArtifactsStep(AzurePipelines.Step step)
         {
-            //There are 3 Azure DevOps variations
-            //# Publish the artifacts
-            //- task: PublishBuildArtifacts@1
-            //  displayName: 'Publish Artifact'
-            //  inputs:
-            //    artifactName: drop
-            //    PathtoPublish: '$(build.artifactstagingdirectory)'";
+            // There are 3 Azure DevOps variations
+            // # Publish the artifacts
+            // - task: PublishBuildArtifacts@1
+            //   displayName: 'Publish Artifact'
+            //   inputs:
+            //     artifactName: drop
+            //     PathtoPublish: '$(build.artifactstagingdirectory)'";
 
-            //# Publishing pipeline artifacts is almost identical
-            //- task: PublishPipelineArtifact@0
-            //  displayName: Store artifact
-            //  inputs:
-            //    artifactName: 'MyProject'
-            //    targetPath: 'MyProject/bin/release/netcoreapp2.2/publish/'
+            // # Publishing pipeline artifacts is almost identical
+            // - task: PublishPipelineArtifact@0
+            //   displayName: Store artifact
+            //   inputs:
+            //     artifactName: 'MyProject'
+            //     targetPath: 'MyProject/bin/release/netcoreapp2.2/publish/'
 
-            //- publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-            //  artifact: drop
+            // - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+            //   artifact: drop
 
-            //- name: publish build artifacts back to GitHub
-            //  uses: actions/upload-artifact@v2
-            //  with:
-            //    name: console exe
-            //    path: /home/runner/work/AzurePipelinesToGitHubActionsConverter/AzurePipelinesToGitHubActionsConverter/AzurePipelinesToGitHubActionsConverter/AzurePipelinesToGitHubActionsConverter.ConsoleApp/bin/Release/netcoreapp3.0
+            // - name: publish build artifacts back to GitHub
+            //   uses: actions/upload-artifact@v2
+            //   with:
+            //     name: console exe
+            //     path: /home/runner/work/AzurePipelinesToGitHubActionsConverter/AzurePipelinesToGitHubActionsConverter/AzurePipelinesToGitHubActionsConverter/AzurePipelinesToGitHubActionsConverter.ConsoleApp/bin/Release/netcoreapp3.0
 
             string name = "";
 
@@ -1955,9 +1965,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return null;
         }
 
-        // Some pipelines need supporting steps as part of the processing. 
-        // For example, if we are deploying to Azure, we need to add an Azure Login step
-        public List<GitHubActions.Step> AddSupportingSteps(AzurePipelines.Step[] steps, VariablesProcessing variablesProcessing, OrderedDictionary variables, bool addCheckoutStep = true)
+        public List<GitHubActions.Step> TranslateSteps(AzurePipelines.Step[] steps, VariablesProcessing variablesProcessing, OrderedDictionary variables, bool addCheckoutStep = true)
         {
             var newSteps = new List<GitHubActions.Step>();
 
@@ -1975,7 +1983,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         .Select((step, index) => (step, index))
                         .Where(cs => cs.step.task.ToUpper() == CheckoutStepId)
                         .ToList();
-                    
+                        
                     // TODO: handle checkout steps for other repos?
                     if (checkoutSteps.Any())
                     {

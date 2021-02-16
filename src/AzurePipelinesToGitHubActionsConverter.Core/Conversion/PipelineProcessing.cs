@@ -292,7 +292,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             strategy = generalProcessing.ProcessStrategy(azurePipeline.strategy),
                             container = generalProcessing.ProcessContainer(azurePipeline.resources),
                             //resources = ProcessResources(azurePipeline.resources),
-                            steps = sp.AddSupportingSteps(azurePipeline.steps, _variableProcessing, simpleVariables)
+                            steps = sp.TranslateSteps(azurePipeline.steps, _variableProcessing, simpleVariables)
                         }
                     }
                 };
