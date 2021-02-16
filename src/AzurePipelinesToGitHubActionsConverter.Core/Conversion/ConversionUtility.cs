@@ -181,14 +181,16 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 return yaml;
             }
+
             string processedYaml = yaml;
 
-            //Process conditional insertions/ variables
+            // Process conditional insertions/ variables
             if (processedYaml.IndexOf("{{#if") >= 0 || processedYaml.IndexOf("{{ #if") >= 0 ||
                 processedYaml.IndexOf("${{if") >= 0 || processedYaml.IndexOf("${{ if") >= 0)
             {
                 StringBuilder sb = new StringBuilder();
                 int spacePrefixCount = 0;
+
                 foreach (string line in processedYaml.Split(System.Environment.NewLine))
                 {
                     if (line.IndexOf("{{#if") >= 0 || line.IndexOf("{{ #if") >= 0 ||
@@ -204,15 +206,16 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     }
                     else
                     {
-                        //DANGER WILL ROBINSON - DANGER 
-                        //This is meant for variables, but may affect much more than it should
+                        // DANGER WILL ROBINSON - DANGER 
+                        // This is meant for variables, but may affect much more than it should
                         int currentLinespaceFrefixCount = ConversionUtility.CountSpacesBeforeText(line);
+
                         if (spacePrefixCount > 0 && spacePrefixCount == (currentLinespaceFrefixCount - 2))
                         {
-                            //Correct the location. For example:
-                            //    var1: value1
-                            //becomes:
-                            //  var1: value1
+                            // Correct the location. For example:
+                            //     var1: value1
+                            // becomes:
+                            //   var1: value1
                             sb.Append(GenerateSpaces(spacePrefixCount));
                             sb.Append(line.Trim());
                         }
@@ -225,14 +228,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         {
                             sb.Append(line);
                         }
+
                         sb.Append(System.Environment.NewLine);
                     }
                 }
+
                 processedYaml = sb.ToString();
             }
 
             return processedYaml;
-
         }
 
         public static string ProcessAndCleanElement(string yaml, string searchString, string newLineName)
@@ -241,32 +245,35 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 return null;
             }
+
             StringBuilder newYaml = new StringBuilder();
-            //Search the YAML, line by line
+
+            // Search the YAML, line by line
             foreach (string line in yaml.Split(System.Environment.NewLine))
             {
-                //If the search string is found, start processing it
+                // If the search string is found, start processing it
                 if (line.ToLower().IndexOf(searchString, StringComparison.OrdinalIgnoreCase) >= 0 &&
-                    line.ToLower().IndexOf(searchString + " |") == -1) //We don't want to catch the docker tags. This isn't perfect, but should catch most situations.
+                    line.ToLower().IndexOf(searchString + " |") == -1) // We don't want to catch the docker tags. This isn't perfect, but should catch most situations.
                 {
-                    //Split the string by the :
+                    // Split the string by the :
                     string[] items = line.Split(':');
-                    //if there are 2 sections, continue
+
+                    // if there are 2 sections, continue
                     if (items.Length == 2 && items[1].ToString().Trim().Length > 0)
                     {
-                        //Get the count of whitespaces in front of the variable
+                        // Get the count of whitespaces in front of the variable
                         int prefixSpaceCount = CountSpacesBeforeText(items[0]);
 
-                        //start building the new string, with the white space count
+                        // start building the new string, with the white space count
                         newYaml.Append(GenerateSpaces(prefixSpaceCount));
-                        //Add the main keyword
+                        // Add the main keyword
                         newYaml.Append(items[0].Trim());
                         newYaml.Append(": ");
                         newYaml.Append(System.Environment.NewLine);
-                        //on the new line, add the white spaces + two more spaces for the indent
+                        // on the new line, add the white spaces + two more spaces for the indent
                         newYaml.Append(GenerateSpaces(prefixSpaceCount + 2));
                         newYaml.Append(newLineName);
-                        //The main value
+                        // The main value
                         newYaml.Append(items[1].Trim());
                         newYaml.Append(System.Environment.NewLine);
                     }
@@ -282,6 +289,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     newYaml.Append(System.Environment.NewLine);
                 }
             }
+
             return newYaml.ToString();
         }
 
@@ -302,69 +310,80 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
         public static string ConvertMessageToYamlComment(string message)
         {
-            //Append a comment to the message if one doesn't already exist
+            // Append a comment to the message if one doesn't already exist
             if (message.TrimStart().StartsWith("#") == false)
             {
                 message = "#" + message;
             }
+
             return message;
         }
 
-        //Add a steps parent, to allow the processing of an individual step to proceed
+        // Add a steps parent, to allow the processing of an individual step to proceed
         public static string StepsPreProcessing(string input)
         {
-            //If the step isn't wrapped in a "steps:" node, we need to add this, so we can process the step
+            // If the step isn't wrapped in a "steps:" node, we need to add this, so we can process the step
             if (input.Trim().StartsWith("steps:") == false)
             {
-                //we need to add steps, before we do, we need to see if the task needs an indent
+                // we need to add steps, before we do, we need to see if the task needs an indent
                 string[] stepLines = input.Split(System.Environment.NewLine);
+
                 if (stepLines.Length > 0)
                 {
                     int i = 0;
-                    //Search for the first non empty line
+
+                    // Search for the first non empty line
                     while (string.IsNullOrEmpty(stepLines[i].Trim()) == true)
                     {
                         i++;
                     }
+
                     if (stepLines[i].Trim().StartsWith("-") == true)
                     {
                         int indentLevel = stepLines[i].IndexOf("-");
                         indentLevel += 2;
                         string buffer = ConversionUtility.GenerateSpaces(indentLevel);
                         StringBuilder newInput = new StringBuilder();
+
                         foreach (string line in stepLines)
                         {
                             newInput.Append(buffer);
                             newInput.Append(line);
                             newInput.Append(System.Environment.NewLine);
                         }
+
                         input = newInput.ToString();
                     }
 
                     input = "steps:" + System.Environment.NewLine + input;
                 }
             }
+
             return input;
         }
 
 
-        //Used by jobs and stages
+        // Used by jobs and stages
         public static string GenerateJobName(AzurePipelines.Job job, int currentIndex)
         {
-            //Get the job name
+            // Get the job name
             string jobName = job.job;
+
             if (jobName == null && job.deployment != null)
             {
                 jobName = job.deployment;
             }
+
             if (jobName == null && job.template != null)
             {
                 jobName = "Template";
             }
+
             if (string.IsNullOrEmpty(jobName) == true)
             {
                 jobName = "job" + currentIndex.ToString();
             }
+
             return jobName;
         }
 
