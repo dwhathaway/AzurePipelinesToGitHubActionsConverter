@@ -681,6 +681,41 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
             }
 
+            try
+            {
+                // Convert ADO setVariable syntax to GitHub Actions syntaxwithin scripts
+                if (!string.IsNullOrEmpty(gitHubStep.run))
+                {
+                    const string vsoSetVarCmd = "##vso[task.setvariable variable=";
+                    var cmdLength = vsoSetVarCmd.Length;
+                    var setVarCommandStart = gitHubStep.run.IndexOf(vsoSetVarCmd);
+
+                    while (setVarCommandStart > -1)
+                    {
+                        var cmdEnd = gitHubStep.run.IndexOf(';', setVarCommandStart);
+
+                        if (cmdEnd < 0)
+                        {
+                            cmdEnd = gitHubStep.run.IndexOf(']', setVarCommandStart);
+                        }
+
+                        var variableName = gitHubStep.run.Substring(setVarCommandStart + cmdLength, cmdEnd - (setVarCommandStart + cmdLength)).TrimEnd(';', ']');
+
+                        var valueEnd = gitHubStep.run.IndexOf('"', cmdEnd);
+                        var varValue = gitHubStep.run.Substring(cmdEnd + 1, valueEnd - (cmdEnd + 1));
+
+                        gitHubStep.run = gitHubStep.run.Remove(setVarCommandStart, valueEnd - setVarCommandStart + 1);
+                        gitHubStep.run = gitHubStep.run.Insert(setVarCommandStart, $"{ variableName }={ varValue }\" >> $GITHUB_ENV");
+
+                        setVarCommandStart = gitHubStep.run.IndexOf(vsoSetVarCmd);
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                gitHubStep.step_message = $"Error converting ADO logging commands to environment commands: { ex.Message }";
+            }
+
             if (!string.IsNullOrWhiteSpace(gitHubStep.run))
             {
                 // Spaces on the beginning or end seem to be a problem for the YAML serialization, so we Trim() here
@@ -702,15 +737,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     gitHubStep.run = gitHubStep.run.Remove(gitHubStep.run.Length - 1);
                 }
 
-                if (gitHubStep.run.StartsWith(System.Environment.NewLine))
-                {
-                    int i = 0;
-                }
+                // if (gitHubStep.run.StartsWith(System.Environment.NewLine))
+                // {
+                //     int i = 0;
+                // }
 
-                if (string.IsNullOrWhiteSpace(gitHubStep.run.First().ToString()))
-                {
-                    var leadingWhitespace = true;
-                }
+                // if (string.IsNullOrWhiteSpace(gitHubStep.run.First().ToString()))
+                // {
+                //     var leadingWhitespace = true;
+                // }
             }
 
             if (string.IsNullOrWhiteSpace(gitHubStep.shell))
