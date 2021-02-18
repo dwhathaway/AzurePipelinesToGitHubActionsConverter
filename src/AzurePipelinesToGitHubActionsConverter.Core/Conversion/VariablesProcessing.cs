@@ -18,6 +18,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         private readonly bool _verbose;
         private readonly List<VariableGroup> VariableGroups;
         public List<string> VariableList;
+        private Dictionary<string, string> variables = new Dictionary<string, string>();
         private List<string> secrets = new List<string>();
         private List<string> usedSecrets = new List<string>();
         public VariableGroup KeyVaultGroup;
@@ -91,9 +92,21 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return VariableGroups.SingleOrDefault(g => g.name == groupName);
         }
 
+        public string GetVariableValue(string variableName)
+        {
+            this.variables.TryGetValue(variableName, out string value);
+
+            return value;
+        }
+
         public bool AnyKeyVaultSecretsConsumed()
         {
             return usedSecrets.Any(s => KeyVaultGroup?.variables.ContainsKey(s) ?? false);
+        }
+
+        public void BeginJobProcessing()
+        {
+            this.variables = new Dictionary<string, string>();
         }
 
         // process all (simple) variables
@@ -102,9 +115,10 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             if (variables != null)
             {
                 // update variables from the $(variableName) format to ${{variableName}} format, by piping them into a list for replacement later.
-                foreach (string key in variables.Keys)
+                foreach (DictionaryEntry keyValue in variables)
                 {
-                    VariableList.Add(key);
+                    VariableList.Add(keyValue.StringKey());
+                    this.variables[keyValue.StringKey()] = keyValue.StringValue();
                 }
             }
 
@@ -126,6 +140,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         processedVariables.Add(variables[i].name, variables[i].value);
                         VariableList.Add(variables[i].name);
+                        this.variables[variables[i].name] = variables[i].value;
                     }
 
                     // groups
@@ -166,6 +181,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         processedVariables.Add(variables[i].name, variables[i].value);
                         VariableList.Add(variables[i].name);
+                        this.variables[variables[i].name] = variables[i].value;
                     }
 
                     // groups

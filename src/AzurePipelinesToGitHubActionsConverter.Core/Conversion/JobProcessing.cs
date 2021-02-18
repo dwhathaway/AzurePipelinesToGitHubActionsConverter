@@ -25,6 +25,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
         {
             var generalProcessing = new GeneralProcessing(_verbose);
             var sp = new StepsProcessing();
+            _variableProcessing.BeginJobProcessing();
 
             var newJob = new GitHubActions.Job
             {
