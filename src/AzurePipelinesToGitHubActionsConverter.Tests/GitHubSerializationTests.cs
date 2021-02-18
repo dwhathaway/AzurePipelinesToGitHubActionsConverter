@@ -67,7 +67,7 @@ jobs:
           
             //Test that steps exist
             Assert.AreNotEqual(null, gitHubJob.steps);
-            Assert.AreEqual(2, gitHubJob.steps.Length);
+            Assert.AreEqual(2, gitHubJob.steps.Count);
         }
 
 
