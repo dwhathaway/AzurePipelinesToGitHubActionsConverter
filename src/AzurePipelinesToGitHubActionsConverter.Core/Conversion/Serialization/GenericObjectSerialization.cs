@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using YamlDotNet.Core;
+﻿using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.EventEmitters;
 
@@ -56,88 +55,6 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
             }
 
             nextEmitter.Emit(eventInfo, emitter);
-        }
-    }
-
-    class MyEventEmitter : ChainedEventEmitter
-    {
-        private class EmitterState
-        {
-            private int valuePeriod;
-            private int currentIndex;
-
-            public EmitterState(int valuePeriod)
-            {
-                this.valuePeriod = valuePeriod;
-            }
-
-            public bool VisitNext()
-            {
-                ++currentIndex;
-                return (currentIndex % valuePeriod) == 0;
-            }
-        }
-
-        private readonly Stack<EmitterState> state = new Stack<EmitterState>();
-
-        public MyEventEmitter(IEventEmitter nextEmitter)
-            : base(nextEmitter)
-        {
-            this.state.Push(new EmitterState(1));
-        }
-
-        public override void Emit(ScalarEventInfo eventInfo, IEmitter emitter)
-        {
-            if (this.state.Peek().VisitNext())
-            {
-                // if (eventInfo.Source.Type == typeof(string))
-                // {
-                //     eventInfo.Style = ScalarStyle.DoubleQuoted;
-                // }
-
-                // if (eventInfo.Source.Value?.ToString() == "Report LFS Data Usage")
-                // {
-                //     int i = 0;
-                // }
-
-                if (eventInfo.Source.Value?.ToString().StartsWith("function DisplayInBytes($num)") ?? false)
-                {
-                    eventInfo.Style = ScalarStyle.Literal;
-                }
-
-                if (eventInfo.Source.Value?.ToString().StartsWith("git submodule deinit -f handheld/src-external/imgui") ?? false)
-                {
-                    eventInfo.Style = ScalarStyle.Literal;
-                }
-            }
-
-            base.Emit(eventInfo, emitter);
-        }
-
-        public override void Emit(MappingStartEventInfo eventInfo, IEmitter emitter)
-        {
-            this.state.Peek().VisitNext();
-            this.state.Push(new EmitterState(2));
-            base.Emit(eventInfo, emitter);
-        }
-
-        public override void Emit(MappingEndEventInfo eventInfo, IEmitter emitter)
-        {
-            this.state.Pop();
-            base.Emit(eventInfo, emitter);
-        }
-
-        public override void Emit(SequenceStartEventInfo eventInfo, IEmitter emitter)
-        {
-            this.state.Peek().VisitNext();
-            this.state.Push(new EmitterState(1));
-            base.Emit(eventInfo, emitter);
-        }
-
-        public override void Emit(SequenceEndEventInfo eventInfo, IEmitter emitter)
-        {
-            this.state.Pop();
-            base.Emit(eventInfo, emitter);
         }
     }
 }
