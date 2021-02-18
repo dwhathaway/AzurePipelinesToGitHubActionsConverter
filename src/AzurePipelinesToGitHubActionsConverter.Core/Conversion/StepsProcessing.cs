@@ -107,6 +107,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     case "PYTHONSCRIPT@0":
                         gitHubStep = CreatePythonStep(step);
                         break;
+                    case "PUBLISHSYMBOLS@2":
+                        gitHubStep = CreatePublishSymbolsStep(step, variablesProcessing);
+                        break;
                     case "PUBLISHTESTRESULTS@2":
                         gitHubStep = CreatePublishTestResultsStep(step);
                         break;
@@ -503,7 +506,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                 args += excludeArgs;
 
-                step.script += System.Environment.NewLine + $"Get-ChildItem -Path '{ sourceFolder }'{ args } | Copy-Item -Destination '{ targetFolder }' -Recurse -Container" + System.Environment.NewLine;
+                step.script += System.Environment.NewLine + $"Get-ChildItem -Path '{ sourceFolder }'{ args } | Copy-Item -Destination '{ targetFolder }' -Recurse -Container -Verbose" + System.Environment.NewLine;
             }
 
             return CreateScriptStep(step, ShellType.PowerShell);
@@ -702,10 +705,16 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         var variableName = gitHubStep.run.Substring(setVarCommandStart + cmdLength, cmdEnd - (setVarCommandStart + cmdLength)).TrimEnd(';', ']');
 
                         var valueEnd = gitHubStep.run.IndexOf('"', cmdEnd);
-                        var varValue = gitHubStep.run.Substring(cmdEnd + 1, valueEnd - (cmdEnd + 1));
+                        var varValue = gitHubStep.run.Substring(cmdEnd + 1, valueEnd - (cmdEnd + 1)).TrimStart(';', ']');
+                        var varWrite = $"{ variableName }={ varValue }\"";
 
                         gitHubStep.run = gitHubStep.run.Remove(setVarCommandStart, valueEnd - setVarCommandStart + 1);
-                        gitHubStep.run = gitHubStep.run.Insert(setVarCommandStart, $"{ variableName }={ varValue }\" >> $GITHUB_ENV");
+                        gitHubStep.run = gitHubStep.run.Insert(setVarCommandStart, varWrite);
+                        var outputStart = setVarCommandStart + varWrite.Length;
+                        outputStart = (gitHubStep.run.Length > outputStart && gitHubStep.run[outputStart] == ')') ? outputStart + 1 : outputStart;
+
+                        var outputTo = shellType == ShellType.PowerShell ? " | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append" : " >> $GITHUB_ENV";
+                        gitHubStep.run = gitHubStep.run.Insert(outputStart, outputTo);
 
                         setVarCommandStart = gitHubStep.run.IndexOf(vsoSetVarCmd);
                     }
@@ -732,19 +741,9 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     gitHubStep.run = string.Join(System.Environment.NewLine, lines.Except(emptyLines));
                 }
 
-                if (string.IsNullOrWhiteSpace(gitHubStep.run.Last().ToString())) // yaml.net can choose an alternate serialization style if the last char is whitespace
-                {
-                    gitHubStep.run = gitHubStep.run.Remove(gitHubStep.run.Length - 1);
-                }
-
-                // if (gitHubStep.run.StartsWith(System.Environment.NewLine))
+                // if (string.IsNullOrWhiteSpace(gitHubStep.run.Last().ToString())) // yaml.net can choose an alternate serialization style if the last char is whitespace
                 // {
-                //     int i = 0;
-                // }
-
-                // if (string.IsNullOrWhiteSpace(gitHubStep.run.First().ToString()))
-                // {
-                //     var leadingWhitespace = true;
+                //     gitHubStep.run = gitHubStep.run.Remove(gitHubStep.run.Length - 1);
                 // }
             }
 
@@ -1677,6 +1676,64 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
 
             return CreateScriptStep(step);
+        }
+
+        private GitHubActions.Step CreatePublishSymbolsStep(AzurePipelines.Step step, VariablesProcessing variablesProcessing)
+        {
+            // Coming from:
+            // # Publish Symbols
+            // - task: PublishSymbols@2
+            //   displayName: 'Publish symbols to ${{parameters.SymbolServerType}} ADO symbol server'
+            //   inputs:
+            //     SymbolsFolder: '$(SymbolsPath)'
+            //     SearchPattern: |
+            //      **/*.pdb
+            //      **/*.exe
+            //     IndexSources: false
+            //     SymbolServerType: TeamServices
+            //     DetailedLog: false
+            //     SymbolsMaximumWaitTime: 30
+
+            // Going to:
+            // - uses: ./.github/actions/publish-symbols
+            //   with:
+            //     accountName: '[ado account name here]'
+            //     symbolServiceUrl: 'https://artifacts.dev.azure.com'
+            //     personalAccessToken: ${{ secrets.PERSONALACCESSTOKEN }}
+            //     searchPattern: | # Optional
+            //       **/*.pdb
+            //       **/*.exe
+
+            // check for account name set to internal ArtifactServices var, otherwise use account where pipeline is being converted
+            var acctName = variablesProcessing.GetVariableValue("ArtifactServices.Symbol.AccountName") ?? ConversionOptions.Account;
+
+            var gitHubStep = new GitHubActions.Step
+            {
+                name = step.displayName,
+                uses = "./.github/actions/publish-symbols",
+                with = new OrderedDictionary
+                {
+                    { "accountName", acctName },
+                    { "personalAccessToken", "${{ secrets.AZUREDEVOPS_PAT }}" }
+                },
+                step_message = "Note: This step assumes a GitHub Secret named AZUREDEVOPS_PAT exists and is a sufficiently permissioned PAT to access the ADO symbol server for the account specified."
+            };
+
+            var folder = GetStepInput(step, "SymbolsFolder");
+
+            if (!string.IsNullOrEmpty(folder))
+            {
+                gitHubStep.with.Add("symbolsFolder", folder);
+            }
+
+            var pattern = GetStepInput(step, "SearchPattern");
+
+            if (!string.IsNullOrEmpty(pattern))
+            {
+                gitHubStep.with.Add("searchPattern", pattern);
+            }
+
+            return gitHubStep;
         }
 
         private GitHubActions.Step CreatePublishTestResultsStep(AzurePipelines.Step step)
