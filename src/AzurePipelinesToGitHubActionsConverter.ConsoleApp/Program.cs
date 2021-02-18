@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using AzurePipelinesToGitHubActionsConverter.ConsoleApp.Commands.Options;
 using AzurePipelinesToGitHubActionsConverter.ConsoleApp.Services;
 using AzurePipelinesToGitHubActionsConverter.Core.Conversion;
+using AzurePipelinesToGitHubActionsConverter.Core;
 using YamlDotNet.Serialization;
 using CommandLine;
 using Newtonsoft.Json;
@@ -123,7 +124,12 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
                         try
                         {
                             // Run the converter
-                            Conversion conversion = new Conversion(variableGroups, opts.AddWorkflowTrigger, opts.VariableCompatMode);
+                            ConversionOptions.Account = opts.Account;
+                            ConversionOptions.RepositoryName = opts.RepositoryName;
+                            ConversionOptions.AddWorkflowTrigger = opts.AddWorkflowTrigger ?? false;
+                            ConversionOptions.VariableCompatMode = opts.VariableCompatMode ?? false;
+                            
+                            Conversion conversion = new Conversion(variableGroups);
 
                             var result = conversion.ConvertAzurePipelineToGitHubAction(pipelineYaml);
 
