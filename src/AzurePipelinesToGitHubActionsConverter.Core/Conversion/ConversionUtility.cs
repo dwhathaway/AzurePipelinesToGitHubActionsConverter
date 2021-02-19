@@ -26,18 +26,20 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             {
                 return yaml;
             }
+
             string processedYaml = yaml;
 
-            //Part 1: remove full line comments. sometimes the yaml converter can't handle these - depending on where the # appears on the line (sometimes it's the first character, other times the first character after whitespace
+            // Part 1: remove full line comments. sometimes the yaml converter can't handle these - depending on where the # appears on the line (sometimes it's the first character, other times the first character after whitespace
             if (processedYaml.IndexOf("#") >= 0)
             {
-                StringBuilder sb = new StringBuilder();
+                var sb = new StringBuilder();
+
                 foreach (string line in processedYaml.Split(System.Environment.NewLine))
                 {
-                    //Remove the comment if it's the a full line (after removing the preceeding white space)
+                    // Remove the comment if it's the a full line (after removing the preceeding white space)
                     if (line.TrimStart().IndexOf("#") == 0)
                     {
-                        //don't add the line back to the stringbuilder, (effectively removing it)
+                        // don't add the line back to the stringbuilder, (effectively removing it)
                     }
                     else
                     {
@@ -45,27 +47,31 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         sb.Append(System.Environment.NewLine);
                     }
                 }
+
                 processedYaml = sb.ToString();
             }
 
-            //Part 2
-            //Process the variables, looking for reserved words
+            // Part 2
+            // Process the variables, looking for reserved words
             if (processedYaml.ToLower().IndexOf("variables:", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 processedYaml.ToLower().IndexOf("parameters:", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 StringBuilder newYaml = new StringBuilder();
                 int variablePrefixSpaceCount = -1;
+
                 foreach (string line in processedYaml.Split(System.Environment.NewLine))
                 {
                     string newLine = line;
+
                     if (line.ToLower().IndexOf("variables:", StringComparison.OrdinalIgnoreCase) >= 0 ||
                         line.ToLower().IndexOf("parameters:", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         string[] items = line.Split(':');
+
                         if (items.Length == 2 && items[0].ToString().Trim().Length > 0)
                         {
                             variablePrefixSpaceCount = items[0].TakeWhile(char.IsWhiteSpace).Count();
-                            //now that we have the variables start, we need to loop through the variable prefix space count + 2
+                            // now that we have the variables start, we need to loop through the variable prefix space count + 2
                         }
                     }
                     else if (variablePrefixSpaceCount >= 0)
@@ -94,73 +100,80 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     {
                         variablePrefixSpaceCount = -1;
                     }
+
                     newYaml.Append(newLine);
                     newYaml.Append(System.Environment.NewLine);
                 }
+
                 processedYaml = newYaml.ToString();
             }
 
-            //Part 3
-            //If the yaml contains pools, check if it's a "simple pool" (pool: string]), 
-            //and convert it to a "complex pool", (pool: \n  name: string)
+            // Part 3
+            // If the yaml contains pools, check if it's a "simple pool" (pool: string]), 
+            // and convert it to a "complex pool", (pool: \n  name: string)
             //
-            //e.g. "  pool: myImage\n" will become:
-            //     "  pool: \n
-            //     "    name: myImage\n
+            // e.g. "  pool: myImage\n" will become:
+            //      "  pool: \n
+            //      "    name: myImage\n
             //
-            //We also repeat this same logic with demands, converting string to string[]
-            //And also environment and tags
+            // We also repeat this same logic with demands, converting string to string[]
+            // And also environment and tags
 
-            //Process the trigger 
+            // Process the trigger 
             if (processedYaml.ToLower().IndexOf("trigger:", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                //Convert a (really) simple string trigger to a string[] trigger
+                // Convert a (really) simple string trigger to a string[] trigger
                 processedYaml = ProcessAndCleanElement(processedYaml, "trigger:", "- ");
-                //Convert a simple string[] trigger to a complex Trigger 
+                // Convert a simple string[] trigger to a complex Trigger 
             }
-            //Process the pool 
+
+            // Process the pool 
             if (processedYaml.ToLower().IndexOf("pool:", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 processedYaml = ProcessAndCleanElement(processedYaml, "pool:", "name: ");
             }
-            //Then process the demands
+
+            // Then process the demands
             if (processedYaml.ToLower().IndexOf(" demands:", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 processedYaml = ProcessAndCleanElement(processedYaml, "demands:", "- ");
             }
-            //Then process the dependsOn
+
+            // Then process the dependsOn
             if (processedYaml.ToLower().IndexOf(" dependson:", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 processedYaml = ProcessAndCleanElement(processedYaml, "dependson:", "- ");
             }
-            //Then process environment, to convert the simple string to a resourceName
+
+            // Then process environment, to convert the simple string to a resourceName
             if (processedYaml.ToLower().IndexOf(" environment:", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 processedYaml = ProcessAndCleanElement(processedYaml, " environment:", "resourceName: ");
             }
-            //Then process the tags (almost identical to demands)
+
+            // Then process the tags (almost identical to demands)
             if (processedYaml.ToLower().IndexOf(" tags:", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 processedYaml = ProcessAndCleanElement(processedYaml, " tags:", "- ");
             }
 
-
-            //Part 4: conditional insertions/ variables
-            //Process conditional variables
+            // Part 4: conditional insertions/ variables
+            // Process conditional variables
             if (processedYaml.IndexOf("{{#if") >= 0 || processedYaml.IndexOf("{{ #if") >= 0 ||
                 processedYaml.IndexOf("${{if") >= 0 || processedYaml.IndexOf("${{ if") >= 0)
             {
                 StringBuilder sb = new StringBuilder();
+
                 foreach (string line in processedYaml.Split(System.Environment.NewLine))
                 {
                     if (line.IndexOf("{{#if") >= 0 || line.IndexOf("{{ #if") >= 0 ||
                         line.IndexOf("${{if") >= 0 || line.IndexOf("${{ if") >= 0)
                     {
-                        //don't add line, remove
+                        // don't add line, remove
                     }
                     else if (line.IndexOf("{{/if") >= 0) //ending if 
                     {
-                        //don't add line, remove
+                        // don't add line, remove
                     }
                     else
                     {
@@ -168,11 +181,11 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         sb.Append(System.Environment.NewLine);
                     }
                 }
+
                 processedYaml = sb.ToString();
             }
 
             return processedYaml;
-
         }
 
         public static string CleanYamlBeforeDeserializationV2(string yaml)
@@ -196,12 +209,12 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     if (line.IndexOf("{{#if") >= 0 || line.IndexOf("{{ #if") >= 0 ||
                         line.IndexOf("${{if") >= 0 || line.IndexOf("${{ if") >= 0)
                     {
-                        //don't add line, we want to remove it, but track the spaces
+                        // don't add line, we want to remove it, but track the spaces
                         spacePrefixCount = ConversionUtility.CountSpacesBeforeText(line);
                     }
                     else if (line.IndexOf("{{/if") >= 0) //ending if 
                     {
-                        //don't add line, remove
+                        // don't add line, remove
                         spacePrefixCount = 0;
                     }
                     else
