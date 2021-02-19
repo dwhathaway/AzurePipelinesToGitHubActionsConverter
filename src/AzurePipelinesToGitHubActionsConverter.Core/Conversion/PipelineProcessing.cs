@@ -280,7 +280,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             if ((azurePipeline.pool != null && azurePipeline.jobs == null) || (azurePipeline.steps != null && azurePipeline.steps.Length > 0))
             {
                 // Steps only have one job, so we just create it here
-                var sp = new StepsProcessing();
+                var sp = new StepsProcessing(_variableProcessing);
 
                 gitHubActions.jobs = new Dictionary<string, GitHubActions.Job>
                 {
@@ -292,7 +292,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                             strategy = generalProcessing.ProcessStrategy(azurePipeline.strategy),
                             container = generalProcessing.ProcessContainer(azurePipeline.resources),
                             //resources = ProcessResources(azurePipeline.resources),
-                            steps = sp.TranslateSteps(azurePipeline.steps, _variableProcessing, simpleVariables)
+                            steps = sp.TranslateSteps(azurePipeline.steps, simpleVariables)
                         }
                     }
                 };

@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 {
@@ -14,8 +15,15 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
     {
         const string CheckoutStepId = "6D15AF64-176C-496D-B583-FD2AE21D4DF4@1";
 
+        private VariablesProcessing variableProcessing;
+
+        public StepsProcessing(VariablesProcessing variableProcessing)
+        {
+            this.variableProcessing = variableProcessing;
+        }
+
         // TODO: Add more task types
-        public GitHubActions.Step ProcessStep(AzurePipelines.Step step, VariablesProcessing variablesProcessing)
+        public GitHubActions.Step ProcessStep(AzurePipelines.Step step)
         {
             GitHubActions.Step gitHubStep = null;
 
@@ -108,7 +116,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                         gitHubStep = CreatePythonStep(step);
                         break;
                     case "PUBLISHSYMBOLS@2":
-                        gitHubStep = CreatePublishSymbolsStep(step, variablesProcessing);
+                        gitHubStep = CreatePublishSymbolsStep(step);
                         break;
                     case "PUBLISHTESTRESULTS@2":
                         gitHubStep = CreatePublishTestResultsStep(step);
@@ -183,7 +191,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
                 if (step.condition != null)
                 {
-                    gitHubStep._if = ConditionsProcessing.TranslateConditions(step.condition, variablesProcessing);
+                    gitHubStep._if = ConditionsProcessing.TranslateConditions(step.condition, variableProcessing);
                 }
 
                 // Double check the with. Sometimes we start to add a property, but for various reasons, we don't use it, and have to null out the with so it doesn't display an empty node in the final yaml
@@ -691,32 +699,63 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 {
                     const string vsoSetVarCmd = "##vso[task.setvariable variable=";
                     var cmdLength = vsoSetVarCmd.Length;
+                    
+                    // are the any vso commands in this script?
                     var setVarCommandStart = gitHubStep.run.IndexOf(vsoSetVarCmd);
 
-                    while (setVarCommandStart > -1)
+                    if (setVarCommandStart > -1)
                     {
-                        var cmdEnd = gitHubStep.run.IndexOf(';', setVarCommandStart);
+                        var lines = gitHubStep.run.Split("\n");
 
-                        if (cmdEnd < 0)
+                        // assume vso commands will come 1 per line
+                        for (int i = lines.Length - 1; i >= 0; i--)
                         {
-                            cmdEnd = gitHubStep.run.IndexOf(']', setVarCommandStart);
+                            var line = lines[i];
+                            setVarCommandStart = line.IndexOf(vsoSetVarCmd);
+
+                            if (setVarCommandStart > -1)
+                            {
+                                var cmdEnd = line.IndexOf(';', setVarCommandStart);
+
+                                if (cmdEnd < 0)
+                                {
+                                    cmdEnd = line.IndexOf(']', setVarCommandStart);
+                                }
+
+                                // find the details for the var being set and its value
+                                var variableName = line.Substring(setVarCommandStart + cmdLength, cmdEnd - (setVarCommandStart + cmdLength)).TrimEnd(';', ']');
+                                var valueEnd = line.IndexOf('"', cmdEnd);
+                                var varValue = line.Substring(cmdEnd + 1, valueEnd - (cmdEnd + 1)).TrimStart(';', ']');
+                                var varWrite = $"{ variableName }={ varValue }\"";
+
+                                // rewrite to Workflow command syntax
+                                line = line.Remove(setVarCommandStart, valueEnd - setVarCommandStart + 1);
+                                line = line.Insert(setVarCommandStart, varWrite);
+
+                                // now for the tricky part - need to find the end of the command block... this can be difficult w/ pwsh with addl methods used & vars, leading to multiple nested ()s
+                                var outputStart = setVarCommandStart + varWrite.Length; // baseline for end of cmd
+                                var endParen = line.IndexOf(')', setVarCommandStart + varWrite.Length);
+
+                                if (endParen > -1) // is there a ) after where we've replaced the cmd? If so we need to find the 'real' end
+                                {
+                                    var nextParen = line.IndexOf('(', outputStart, endParen - outputStart);
+
+                                    while (nextParen > -1)
+                                    {
+                                        endParen = line.IndexOf(')', endParen + 1);
+                                        nextParen = line.IndexOf('(', nextParen + 1, endParen - nextParen);
+                                    }
+
+                                    outputStart = endParen + 1;
+                                }
+
+                                var outputTo = shellType == ShellType.PowerShell ? " | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append" : " >> $GITHUB_ENV";
+                                lines[i] = line.Insert(outputStart, outputTo);
+                            }
                         }
 
-                        var variableName = gitHubStep.run.Substring(setVarCommandStart + cmdLength, cmdEnd - (setVarCommandStart + cmdLength)).TrimEnd(';', ']');
-
-                        var valueEnd = gitHubStep.run.IndexOf('"', cmdEnd);
-                        var varValue = gitHubStep.run.Substring(cmdEnd + 1, valueEnd - (cmdEnd + 1)).TrimStart(';', ']');
-                        var varWrite = $"{ variableName }={ varValue }\"";
-
-                        gitHubStep.run = gitHubStep.run.Remove(setVarCommandStart, valueEnd - setVarCommandStart + 1);
-                        gitHubStep.run = gitHubStep.run.Insert(setVarCommandStart, varWrite);
-                        var outputStart = setVarCommandStart + varWrite.Length;
-                        outputStart = (gitHubStep.run.Length > outputStart && gitHubStep.run[outputStart] == ')') ? outputStart + 1 : outputStart;
-
-                        var outputTo = shellType == ShellType.PowerShell ? " | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append" : " >> $GITHUB_ENV";
-                        gitHubStep.run = gitHubStep.run.Insert(outputStart, outputTo);
-
-                        setVarCommandStart = gitHubStep.run.IndexOf(vsoSetVarCmd);
+                        // stitch it all back together
+                        gitHubStep.run = string.Join("\n", lines);
                     }
                 }
             }
@@ -727,19 +766,18 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             if (!string.IsNullOrWhiteSpace(gitHubStep.run))
             {
-                // Spaces on the beginning or end seem to be a problem for the YAML serialization, so we Trim() here
-                // Also, accidental carriage returns in scripts (such as a path including a \r) need to be accounted for
-                // If this script step includes escaped carriage returns (\\r), switch these to "\\\\r" so that we don't accidentally improperly match these as CRs; we'll fix these up later when we serialize
+                // accidental carriage returns in scripts (such as a path including a \r) need to be accounted for
+                // If this script step includes escaped carriage returns (\\r), switch these to "\\\\r" so that we (YamlDotNet) don't accidentally improperly match these as CRs; we'll fix these up later when we serialize
                 gitHubStep.run = gitHubStep.run.Replace("\\r", "\\\\r").Trim();
 
-                var lines = gitHubStep.run.Split(System.Environment.NewLine);
+                // var lines = gitHubStep.run.Split(System.Environment.NewLine);
 
-                var emptyLines = lines.Where(l => string.IsNullOrWhiteSpace(l));
+                // var emptyLines = lines.Where(l => string.IsNullOrWhiteSpace(l));
 
-                if (emptyLines.Any())
-                {
-                    gitHubStep.run = string.Join(System.Environment.NewLine, lines.Except(emptyLines));
-                }
+                // if (emptyLines.Any())
+                // {
+                //     gitHubStep.run = string.Join(System.Environment.NewLine, lines.Except(emptyLines));
+                // }
 
                 // if (string.IsNullOrWhiteSpace(gitHubStep.run.Last().ToString())) // yaml.net can choose an alternate serialization style if the last char is whitespace
                 // {
@@ -1678,7 +1716,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return CreateScriptStep(step);
         }
 
-        private GitHubActions.Step CreatePublishSymbolsStep(AzurePipelines.Step step, VariablesProcessing variablesProcessing)
+        private GitHubActions.Step CreatePublishSymbolsStep(AzurePipelines.Step step)
         {
             // Coming from:
             // # Publish Symbols
@@ -1705,7 +1743,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             //       **/*.exe
 
             // check for account name set to internal ArtifactServices var, otherwise use account where pipeline is being converted
-            var acctName = variablesProcessing.GetVariableValue("ArtifactServices.Symbol.AccountName") ?? ConversionOptions.Account;
+            var acctName = variableProcessing.GetVariableValue("ArtifactServices.Symbol.AccountName") ?? ConversionOptions.Account;
 
             var gitHubStep = new GitHubActions.Step
             {
@@ -2057,7 +2095,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return null;
         }
 
-        public List<GitHubActions.Step> TranslateSteps(AzurePipelines.Step[] steps, VariablesProcessing variablesProcessing, OrderedDictionary variables, bool addCheckoutStep = true)
+        public List<GitHubActions.Step> TranslateSteps(AzurePipelines.Step[] steps, OrderedDictionary variables, bool addCheckoutStep = true)
         {
             var newSteps = new List<GitHubActions.Step>();
 
@@ -2101,7 +2139,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 }
 
                 // if the ADO pipeline has an Azure Key Vault-backed variable group, and it's used in the current set of vars, we'll add the steps needed to import the KV secrets
-                keyVaultGroup = variablesProcessing.FindVariableGroup(variables, VariableGroup.KeyVaultGroupType);
+                keyVaultGroup = variableProcessing.FindVariableGroup(variables, VariableGroup.KeyVaultGroupType);
 
                 if (keyVaultGroup != null)
                 {
@@ -2111,7 +2149,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                 var newStepOffset = newSteps.Count;
 
                 // Map new GH Actions steps from the ADO steps
-                newSteps.AddRange(steps.Select(s => ProcessStep(s, variablesProcessing)));
+                newSteps.AddRange(steps.Select(s => ProcessStep(s)));
                 
                 // if we're adding a checkout action, insert it at the index we identified above
                 if (checkoutStep != default)

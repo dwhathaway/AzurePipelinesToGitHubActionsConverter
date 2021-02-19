@@ -167,8 +167,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion.Serialization
                         //{
                         //    indentLevel -= 2;
                         //}
-                        string buffer = ConversionUtility.GenerateSpaces(indentLevel);
-                        StringBuilder newInput = new StringBuilder();
+                        var buffer = ConversionUtility.GenerateSpaces(indentLevel);
+                        var newInput = new StringBuilder();
 
                         foreach (string line in stepLines)
                         {

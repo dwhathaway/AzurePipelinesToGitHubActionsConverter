@@ -552,7 +552,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             return list;
         }
 
-        private MatchCollection FindPipelineVariables(string input)
+        public MatchCollection FindPipelineVariables(string input)
         {
             // match anything in ${}, ${{}}, $(), $[], but NOT $var
             return FindPipelineVariables(input, @"[^\r\n()\{\}\[\]$]+");
