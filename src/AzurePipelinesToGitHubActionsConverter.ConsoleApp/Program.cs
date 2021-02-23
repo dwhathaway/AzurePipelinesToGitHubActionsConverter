@@ -123,6 +123,9 @@ namespace AzurePipelinesToGitHubActionsConverter.ConsoleApp
 
                         try
                         {
+                            // Write the initial ADO 'compiled'/preview yaml to a file
+                            File.WriteAllText(Path.Combine(outputFolder, yamlFilename.Replace(".yml", ".ado.yml")), pipelineYaml);
+
                             // Run the converter
                             ConversionOptions.Account = opts.Account;
                             ConversionOptions.RepositoryName = opts.RepositoryName;
