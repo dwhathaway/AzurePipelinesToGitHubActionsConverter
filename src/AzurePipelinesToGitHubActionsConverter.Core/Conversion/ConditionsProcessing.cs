@@ -173,7 +173,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
                     return $"{ actionsFunction ?? condition }({ contents })";
 
                 default:
-                    return "";
+                    return condition; // return as is if we don't have support here for it yet
             }
         }
 
