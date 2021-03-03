@@ -44,29 +44,30 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             // Sometimes conditions are spread over multiple lines, we are going to compress this to one line to make the processing easier
             condition = condition.Replace("\r\n", "");
 
-            string processedCondition = "";
+            var processedCondition = "";
 
             // Get the condition. split the key word from the contents
-            List<string> contentList = FindBracketedContentsInString(condition);
+            var contentList = FindBracketedContentsInString(condition);
 
             // Examine the contents for last set of contents, the most complete piece of the contents, to get the keywords, recursively, otherwise, convert the contents to GitHub
-            string contents = contentList[contentList.Count - 1];
-            string conditionKeyWord = condition.Replace("(" + contents + ")", "").Trim();
+            var contents = contentList[contentList.Count - 1];
+            var conditionKeyWord = condition.Replace("(" + contents + ")", "").Trim();
+            var firstParenIndex = contents.IndexOf("(");
 
-            if (contents.IndexOf("(") >= 0)
+            if (firstParenIndex >= 0)
             {
                 // Need to count the number "(" brackets. If it's > 1, then iterate until we get to one.
-                int bracketsCount = CountCharactersInString(contents, ')');
+                var bracketsCount = CountCharactersInString(contents, ')');
 
-                if (bracketsCount >= 1)
+                if (bracketsCount >= 1 && contents[firstParenIndex - 1] != '$') // looking for bracketed () content, but not if it's a variable usage
                 {
                     // Split the strings by "," - but also respecting brackets
-                    List<string> innerContents = SplitContents(contents);
-                    string innerContentsProcessed = "";
+                    var innerContents = SplitContents(contents);
+                    var innerContentsProcessed = "";
 
                     for (int i = 0; i < innerContents.Count; i++)
                     {
-                        string innerContent = innerContents[i];
+                        var innerContent = innerContents[i];
                         innerContentsProcessed += TranslateConditions(innerContent, vp, depth, context);
 
                         if (i != innerContents.Count - 1)
@@ -108,6 +109,7 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             }
             else if (condition.IndexOf("eq(variables['Build.SourceBranchName']") >= 0)
             {
+                // TODO: this is not proper actions syntax, fix
                 condition = condition.Replace("eq(variables['Build.SourceBranchName']", "endsWith(github.ref");
             }
 
