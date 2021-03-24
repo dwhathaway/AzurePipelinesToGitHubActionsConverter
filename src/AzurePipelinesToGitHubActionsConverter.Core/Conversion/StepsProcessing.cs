@@ -415,12 +415,8 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
             //     blobPrefix: $(RC_TAG)/${{parameters.Definition}}/${{parameters.BuildId}}
 
             // To:
-            // - name: Azure CLI script
-            //   uses: azure/CLI@v1
-            //   with:
-            //     azcliversion: 2.0.72 // defaults to latest
-            //     inlineScript: |
-            //     az storage blob upload-batch --destination { containerName } --source { sourcePath }
+            // - name: Copy artifacts to sebuildarchive
+            //   run: az storage blob upload-batch --destination 'minecraft' --source '${{ env.ArchiveFolder }}' --destination-path '${{ env.RC_TAG }}/${{ github.workflow }}/${{ github.run_id }}' --subscription c84f1b16-b39d-431d-acb6-9a89110cb128 --account-name 'sebuildarchive' --auth-mode login
 
 
             var destination = GetStepInput(step, "destination");
@@ -432,38 +428,45 @@ namespace AzurePipelinesToGitHubActionsConverter.Core.Conversion
 
             var sourcePath = GetStepInput(step, "sourcePath");
             var containerName = GetStepInput(step, "containerName");
+            var blobPrefix = GetStepInput(step, "blobPrefix");
+            var azureSubscription = GetStepInput(step, "azureSubscription");
+            var storage = GetStepInput(step, "storage");
 
             var gitHubStep = new GitHubActions.Step
             {
                 name = step.displayName,
-                uses = "Azure/CLI@v1",
-                with = new OrderedDictionary
-                {
-                    { "inlineScript", $"az storage blob upload-batch --destination { containerName } --source { sourcePath }" }
-                },
-                DependsOn = GitHubActions.StepDependencies.AzureLogin
+                run = $"az storage blob upload-batch --destination '{ containerName }' --source '{ sourcePath }' --destination-path '{ blobPrefix }' --subscription { azureSubscription } --account-name '{ storage }' --auth-mode login",
+                step_message = "This step conversion uses the Azure CLI to copy storage blobs (az storage blob upload-batch). Please ensure the runner has az CLI installed and/or configure a step to install the az CLI.",
+                DependsOn = StepDependencies.AzureLogin
             };
 
-            var blobPrefix = GetStepInput(step, "blobPrefix");
+            // Below Azure/CLI@v1 conversion only works for Linux-based runners, tabling for now
 
-            if (!string.IsNullOrEmpty(blobPrefix))
-            {
-                gitHubStep.with["inlineScript"] += $" --destination-path { blobPrefix }";
-            }
+            // var gitHubStep = new GitHubActions.Step
+            // {
+            //     name = step.displayName,
+            //     uses = "Azure/CLI@v1",
+            //     with = new OrderedDictionary
+            //     {
+            //         { "inlineScript", $"az storage blob upload-batch --destination { containerName } --source { sourcePath }" }
+            //     },
+            //     DependsOn = GitHubActions.StepDependencies.AzureLogin
+            // };
 
-            var azureSubscription = GetStepInput(step, "azureSubscription");
+            // if (!string.IsNullOrEmpty(blobPrefix))
+            // {
+            //     gitHubStep.with["inlineScript"] += $" --destination-path { blobPrefix }";
+            // }
 
-            if (!string.IsNullOrEmpty(azureSubscription))
-            {
-                gitHubStep.with["inlineScript"] += $" --subscription { azureSubscription }";
-            }
+            // if (!string.IsNullOrEmpty(azureSubscription))
+            // {
+            //     gitHubStep.with["inlineScript"] += $" --subscription { azureSubscription }";
+            // }
 
-            var storage = GetStepInput(step, "storage");
-
-            if (!string.IsNullOrEmpty(storage))
-            {
-                gitHubStep.with["inlineScript"] += $" --account-name { storage }";
-            }
+            // if (!string.IsNullOrEmpty(storage))
+            // {
+            //     gitHubStep.with["inlineScript"] += $" --account-name { storage }";
+            // }
 
             return gitHubStep;
         }
